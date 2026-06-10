@@ -1,0 +1,732 @@
+\chapter{Mathematical Foundations}
+\label{ch:foundations}
+%%═══════════════════════════════════════════════════════════════════════════════
+
+\epigraph{%
+  \emph{``We do not observe what is missing; we only observe that something
+  is missing.''}
+}{--- paraphrasing \citet{little2019}}
+
+This chapter develops the mathematical vocabulary used throughout the thesis.
+\Cref{sec:prob_space} introduces the measure-theoretic framework for
+stochastic processes.  \Cref{sec:fin_ts} specialises it to financial time
+series and records the stylized facts that inform algorithm design.
+\Cref{sec:missing_data_model} introduces the formal missing-data model.
+\Cref{sec:rubin} presents Rubin's taxonomy adapted to the time-series
+setting, discusses ignorability, and gives financial interpretations of each
+mechanism.  \Cref{sec:causal_imputation} formalises the causal imputation
+constraint and the notion of look-ahead bias.  \Cref{sec:problem_statement}
+states the imputation problem precisely and identifies the oracle solution.
+The chapter closes in \Cref{sec:identifiability,sec:evaluation} with
+identifiability results and the evaluation framework used in subsequent
+chapters.
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{Probability Spaces and Filtrations}
+\label{sec:prob_space}
+%%─────────────────────────────────────────────────────────────────────────────
+
+\begin{definition}[Probability space]
+\label{def:prob_space}
+A \emph{probability space} is a triple $(\Omega,\F,\P)$ where:
+\begin{enumerate}[(i)]
+  \item $\Omega$ is a non-empty set (the \emph{sample space});
+  \item $\F$ is a $\sigma$-algebra on $\Omega$: a collection of
+        \emph{events} closed under complementation and countable unions,
+        with $\Omega\in\F$;
+  \item $\P:\F\to[0,1]$ is a \emph{probability measure}: countably additive
+        with $\P(\Omega)=1$.
+\end{enumerate}
+The space is \emph{complete} if every subset of a $\P$-null set belongs
+to $\F$.
+\end{definition}
+
+Throughout this thesis we work on a fixed complete probability space
+$(\Omega,\F,\P)$.
+
+\begin{definition}[Filtration and usual conditions]
+\label{def:filtration}
+Let $\TT$ be a linearly ordered index set.  A \emph{filtration} on
+$(\Omega,\F,\P)$ is an increasing family
+$\bbF=(\F_t)_{t\in\TT}$ of sub-$\sigma$-algebras of $\F$:
+\[
+  \F_s \subseteq \F_t \subseteq \F
+  \qquad \text{for all } s \le t.
+\]
+The filtration satisfies the \emph{usual conditions} if:
+\begin{enumerate}[(i)]
+  \item \emph{Completeness}: $\F_0$ contains all $\P$-null sets of $\F$;
+  \item \emph{Right-continuity}:
+        $\displaystyle\F_t = \F_{t+} := \bigcap_{u>t}\F_u$
+        for all $t\in\TT$.
+\end{enumerate}
+The quadruple $(\Omega,\F,\bbF,\P)$ is a \emph{filtered probability space}.
+\end{definition}
+
+\begin{remark}
+In discrete time $\TT=\{0,1,2,\ldots\}$ (or a finite horizon
+$\{0,1,\ldots,T\}$) right-continuity holds automatically, so only
+completeness needs to be imposed.  This is the setting of the present thesis.
+\end{remark}
+
+The filtration $(\F_t)$ models the \emph{accumulation of information}:
+$\F_t$ encodes everything that is knowable at time $t$.  It is the
+central object in the formalisation of the causal constraint.
+
+\begin{definition}[Adapted and predictable processes]
+\label{def:adapted}
+Let $(E,\mathcal{E})$ be a measurable space.
+A stochastic process $(X_t)_{t\in\TT}$ with values in $E$ is:
+\begin{enumerate}[(i)]
+  \item \emph{$\bbF$-adapted} if $X_t$ is $\F_t$-measurable for every
+        $t\in\TT$;
+  \item \emph{$\bbF$-predictable} (in discrete time) if $X_t$ is
+        $\F_{t-1}$-measurable for every $t\ge 1$.
+\end{enumerate}
+\end{definition}
+
+An adapted process can depend on all information available \emph{at} time $t$;
+a predictable process is determined by information \emph{strictly before} $t$.
+Trading strategies, for instance, must be predictable to be implementable.
+
+\begin{definition}[Natural filtration]
+\label{def:natural_filtration}
+The \emph{natural filtration} of a process $(X_t)_{t\in\TT}$ is
+\[
+  \F_t^X := \sigma(X_s : s \le t), \qquad t\in\TT,
+\]
+the smallest filtration to which $(X_t)$ is adapted.
+\end{definition}
+
+\begin{definition}[Conditional independence]
+\label{def:cond_indep}
+Random variables $X$ and $Y$ are \emph{conditionally independent given $Z$},
+written $X\perp\!\!\!\perp Y \mid Z$, if
+\[
+  \P(X\in A,\, Y\in B \mid Z) = \P(X\in A\mid Z)\,\P(Y\in B\mid Z)
+  \qquad \P\text{-a.s.}
+\]
+for all measurable sets $A$, $B$.
+\end{definition}
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{Financial Time Series}
+\label{sec:fin_ts}
+%%─────────────────────────────────────────────────────────────────────────────
+
+Let $(\Omega,\F,\bbF,\P)$ be a filtered probability space with discrete time
+index $\TT=\{1,2,\ldots,T\}$.
+
+\begin{definition}[Price process and log-returns]
+\label{def:returns}
+Let $d\in\N$.  The \emph{price process} is an $\bbF$-adapted,
+$\R^d_{>0}$-valued process $(\bS_t)_{t\ge 0}$, where the $j$-th coordinate
+$S_{j,t}$ denotes the price of asset $j$ at time $t$.  The
+\emph{multivariate log-return process} is defined component-wise as
+\[
+  Y_{j,t} := \log S_{j,t} - \log S_{j,t-1},
+  \qquad j=1,\ldots,d,\; t\ge 1,
+\]
+so that $\bY_t := (Y_{1,t},\ldots,Y_{d,t})^\top \in\R^d$.
+\end{definition}
+
+Log-returns are preferred to simple returns $S_{j,t}/S_{j,t-1}-1$ because
+they (i) aggregate additively over time:
+$\log(S_T/S_0) = \sum_{t=1}^T Y_{j,t}$, and (ii) are defined on all of
+$\R$, which is more convenient for distributional modelling.
+
+\begin{definition}[Strict and weak stationarity]
+\label{def:stationarity}
+A process $(\bY_t)_{t\in\TT}$ is:
+\begin{enumerate}[(i)]
+  \item \emph{Strictly stationary} if the joint distribution of
+        $(\bY_{t_1},\ldots,\bY_{t_k})$ equals that of
+        $(\bY_{t_1+h},\ldots,\bY_{t_k+h})$ for all
+        $k\ge 1$, indices $t_1<\cdots<t_k$, and shifts $h\in\Z$;
+  \item \emph{Weakly stationary} (or \emph{covariance-stationary}) if
+        $\E[\bY_t]=\bmu$ for all $t$ and
+        $\Cov(\bY_t,\bY_{t+h})=\Gamma(h)$ for all $t,h$, where
+        $\Gamma(h)$ depends only on the lag $h$.
+\end{enumerate}
+\end{definition}
+
+\begin{remark}[Stylized facts of asset returns]
+\label{rem:stylized_facts}
+The seminal study of \citet{cont2001} identifies the following empirical
+regularities of log-return processes, which must be accounted for in
+imputation:
+\begin{enumerate}[(i)]
+  \item \emph{Heavy tails}: the kurtosis of $Y_{j,t}$ exceeds 3
+        (leptokurtosis), implying more mass in the tails than under
+        normality;
+  \item \emph{Absence of linear autocorrelation}: $\Cov(Y_{j,t},Y_{j,t-h})
+        \approx 0$ for $h\ge 1$, consistent with weak-form market efficiency;
+  \item \emph{Volatility clustering}: squared returns $Y_{j,t}^2$ exhibit
+        significant positive autocorrelation for moderate lags
+        $h$, indicating persistent changes in conditional variance;
+  \item \emph{Leverage effect}: returns and future volatility are negatively
+        correlated, $\Cov(Y_{j,t},Y_{j,t+h}^2)<0$ for $h>0$;
+  \item \emph{Cross-sectional correlation}: for assets in the same market,
+        $\Cov(Y_{j,t},Y_{k,t})>0$ for $j\ne k$, a fact exploited by
+        multivariate imputation methods.
+\end{enumerate}
+\end{remark}
+
+\begin{definition}[ARMA model]
+\label{def:arma}
+A weakly stationary $\R^d$-valued process $(\bY_t)$ follows a
+\emph{vector ARMA$(p,q)$} model if
+\[
+  \bY_t = \sum_{i=1}^{p} \bPhi_i\,\bY_{t-i}
+        + \bepsilon_t
+        + \sum_{j=1}^{q} \bTheta_j\,\bepsilon_{t-j},
+\]
+where $\bPhi_i,\bTheta_j\in\R^{d\times d}$ are coefficient matrices and
+$(\bepsilon_t)$ is white noise:
+$\E[\bepsilon_t]=\bzero$ and $\Cov(\bepsilon_t,\bepsilon_s)=\bSigma\,\indic{t=s}$.
+\end{definition}
+
+\begin{definition}[Linear Gaussian state-space model]
+\label{def:lgssm}
+A \emph{linear Gaussian state-space model} (LGSSM) is defined by:
+\begin{align}
+  \bX_t &= \bA\,\bX_{t-1} + \bB\,\bepsilon_t,
+  \quad \bepsilon_t \stackrel{\mathrm{iid}}{\sim}
+        \mathcal{N}(\bzero,\bQ),
+  \label{eq:state_eq}\\
+  \bY_t &= \bC\,\bX_t + \bD\,\bnu_t,
+  \quad \bnu_t \stackrel{\mathrm{iid}}{\sim}
+        \mathcal{N}(\bzero,\bI_d),
+  \label{eq:obs_eq}
+\end{align}
+where $\bX_t\in\R^m$ is the latent \emph{state}, $\bY_t\in\R^d$ is the
+\emph{observation}, and $\bA,\bB,\bC,\bD$ are matrices of conforming
+dimensions.  The LGSSM admits a recursive causal estimator---the
+\emph{Kalman filter}---which is developed in \Cref{ch:methods}.
+\end{definition}
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{The Missing-Data Model}
+\label{sec:missing_data_model}
+%%─────────────────────────────────────────────────────────────────────────────
+
+\begin{definition}[Complete data, missingness indicator, and observed data]
+\label{def:missing_data}
+For each time $t\in\TT$, let
+$\bY_t^*=(Y_{1,t}^*,\ldots,Y_{d,t}^*)^\top\in\R^d$ denote the
+\emph{complete} (possibly unobserved) log-return vector.  The
+\emph{missingness indicator} is
+\[
+  \bfR_t = (R_{1,t},\ldots,R_{d,t})^\top \in \{0,1\}^d,
+  \qquad
+  R_{j,t} := \indic{Y_{j,t}^*\text{ is observed}}.
+\]
+The \emph{observed sub-vector} and \emph{missing sub-vector} are,
+respectively,
+\[
+  \bY_t^{obs}(\bfR_t)
+  := \bigl(Y_{j,t}^*\bigr)_{j:\, R_{j,t}=1}
+  \in \R^{d_t^{obs}},
+  \qquad
+  \bY_t^{mis}(\bfR_t)
+  := \bigl(Y_{j,t}^*\bigr)_{j:\, R_{j,t}=0}
+  \in \R^{d_t^{mis}},
+\]
+where $d_t^{obs}+d_t^{mis}=d$.  When the argument $\bfR_t$ is clear from
+context we write $\bY_t^{obs}$ and $\bY_t^{mis}$.
+\end{definition}
+
+\begin{notation}
+\label{not:history}
+We write $\bY_{1:t}^* := (\bY_1^*,\ldots,\bY_t^*)$ and similarly
+$\bY_{1:t}^{obs}$, $\bfR_{1:t}$.  The \emph{observed history} at time $t$ is
+\[
+  \mathcal{H}_t := \bigl(\bY_{1:t}^{obs},\,\bfR_{1:t}\bigr).
+\]
+\end{notation}
+
+\begin{definition}[Observed-data filtration]
+\label{def:obs_filtration}
+The \emph{observed-data filtration} is
+\[
+  \F_t^{obs}
+  := \sigma\!\bigl(\bY_1^{obs},\bfR_1,\,
+                   \bY_2^{obs},\bfR_2,\,\ldots,\,
+                   \bY_t^{obs},\bfR_t\bigr),
+  \qquad t\ge 1,
+\]
+with $\F_0^{obs}:=\{\varnothing,\Omega\}$.  This is the natural filtration of
+the observable process $(\bY_t^{obs},\bfR_t)_{t\ge 1}$.
+\end{definition}
+
+The key point is that $\F_t^{obs}$ is \emph{strictly coarser} than the
+complete-data filtration
+$\F_t^*:=\sigma(\bY_1^*,\ldots,\bY_t^*,\bfR_1,\ldots,\bfR_t)$, since
+we cannot observe $\bY_t^{mis}$.
+
+\begin{definition}[Joint distribution and canonical factorisations]
+\label{def:joint_factorisation}
+The joint distribution of complete data and missingness is characterised by a
+density $p(\bY_{1:T}^*,\bfR_{1:T};\btheta,\bpsi)$, where $\btheta$
+parametrises the data-generating process and $\bpsi$ parametrises the
+missingness mechanism.  Two canonical factorisations are:
+\begin{enumerate}[(i)]
+  \item \emph{Selection model}:
+        \[
+          p(\bY^*,\bfR;\btheta,\bpsi)
+          = p(\bY^*;\btheta)\;p(\bfR\mid\bY^*;\bpsi);
+        \]
+  \item \emph{Pattern-mixture model}:
+        \[
+          p(\bY^*,\bfR;\btheta,\bpsi)
+          = p(\bY^*\mid\bfR;\bm{\alpha})\;p(\bfR;\bm{\xi}),
+        \]
+        where $(\bm{\alpha},\bm{\xi})$ are functions of $(\btheta,\bpsi)$.
+\end{enumerate}
+The selection model directly separates the data distribution from the
+mechanism; the pattern-mixture model reveals how the distribution of returns
+changes across missingness patterns.
+\end{definition}
+
+\begin{remark}[Recursive structure in time series]
+\label{rem:recursive_structure}
+In discrete time the data model factors as
+\[
+  p(\bY_{1:T}^*;\btheta)
+  = p(\bY_1^*;\btheta)\prod_{t=2}^T p(\bY_t^*\mid\bY_{1:t-1}^*;\btheta),
+\]
+reflecting the adapted structure of the process.  The missingness mechanism
+has an analogous factorisation,
+\[
+  p(\bfR_{1:T}\mid\bY_{1:T}^*;\bpsi)
+  = \prod_{t=1}^T p(\bfR_t\mid\bY_t^*,\mathcal{H}_{t-1};\bpsi),
+\]
+which we exploit in the time-series extension of Rubin's taxonomy.
+\end{remark}
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{Rubin's Taxonomy of Missingness Mechanisms}
+\label{sec:rubin}
+%%─────────────────────────────────────────────────────────────────────────────
+
+\citet{rubin1976} introduced a taxonomy of missing-data mechanisms that has
+become the standard organising framework of the field.  The original
+definitions were stated for cross-sectional data; we adapt them to the
+time-series setting, following \citet{little2019} and the stochastic-process
+perspective of \citet{mar_stochastic2022}.
+
+\subsection{Formal Definitions}
+
+\begin{definition}[Missing Completely At Random (MCAR)]
+\label{def:mcar}
+The missingness at time $t$ is \emph{Missing Completely At Random} (MCAR) if
+\[
+  \bfR_t \;\perp\!\!\!\perp\; \bY_t^*
+  \;\Big|\; \mathcal{H}_{t-1},
+\]
+i.e.\ conditional on the observed history, the missingness indicator is
+independent of the current complete data vector:
+\[
+  \P\!\bigl(\bfR_t = \br \mid \bY_t^*,\,\mathcal{H}_{t-1}\bigr)
+  = \P\!\bigl(\bfR_t = \br \mid \mathcal{H}_{t-1}\bigr)
+  \qquad \P\text{-a.s.}
+\]
+for all $\br\in\{0,1\}^d$.
+\end{definition}
+
+\begin{definition}[Missing At Random (MAR)]
+\label{def:mar}
+The missingness at time $t$ is \emph{Missing At Random} (MAR) if
+\[
+  \bfR_t \;\perp\!\!\!\perp\; \bY_t^{mis}
+  \;\Big|\; \bY_t^{obs},\,\mathcal{H}_{t-1},
+\]
+i.e.\ conditional on the observed components of $\bY_t^*$ and the observed
+history, the missingness indicator is independent of the \emph{missing}
+components:
+\[
+  \P\!\bigl(\bfR_t = \br \mid \bY_t^*,\,\mathcal{H}_{t-1}\bigr)
+  = \P\!\bigl(\bfR_t = \br \mid \bY_t^{obs}(\br),\,\mathcal{H}_{t-1}\bigr)
+  \qquad \P\text{-a.s.}
+\]
+\end{definition}
+
+\begin{definition}[Missing Not At Random (MNAR)]
+\label{def:mnar}
+The missingness at time $t$ is \emph{Missing Not At Random} (MNAR) if it is
+neither MCAR nor MAR, i.e.\ the probability of the missingness pattern
+depends on the \emph{missing} values themselves even after conditioning on
+$\bY_t^{obs}$ and $\mathcal{H}_{t-1}$.
+\end{definition}
+
+\begin{remark}[Hierarchy and terminology]
+\label{rem:mcar_implies_mar}
+MCAR is a special case of MAR: set $\bY_t^{obs}=\varnothing$ in
+\Cref{def:mar}.  The three mechanisms are exhaustive and mutually
+exclusive by construction.
+
+The naming can be misleading: ``Missing At Random'' does \emph{not} mean
+that missingness is random in the colloquial sense; it means that missingness
+can depend on \emph{observed} quantities but not on \emph{unobserved}
+ones.  The term was introduced with this technical meaning by
+\citet{rubin1976}.
+\end{remark}
+
+\subsection{Financial Interpretations}
+\label{subsec:financial_interpretations}
+
+\begin{example}[MCAR in financial data]
+\label{ex:mcar}
+A data vendor introduces transmission errors that independently drop each
+asset's return at each time step with probability $\pi\in(0,1)$, regardless
+of the return's magnitude or any market variable:
+$\P(R_{j,t}=0)=\pi$ for all $j,t$, independently.
+This is MCAR.  While it is the most favourable mechanism for inference, it is
+rarely realistic: data loss in practice tends to correlate with market
+conditions.
+\end{example}
+
+\begin{example}[MAR in financial data]
+\label{ex:mar}
+An illiquid small-cap stock fails to trade during periods of low
+aggregate market activity.  Specifically, suppose
+$\P(R_{j,t}=0 \mid Y_{j,t}^*,\,V_t) = g(V_t)$
+for some function $g$, where $V_t$ (e.g.\ the total market trading volume)
+is observed.  The probability of missing depends on $V_t$ but not on the
+stock's own latent return $Y_{j,t}^*$; this is MAR conditional on $V_t$.
+Methods that model the missingness as a function of the observed covariates
+can recover unbiased estimates in this regime.
+\end{example}
+
+\begin{example}[MNAR in financial data]
+\label{ex:mnar}
+A bond is not priced by the dealer during periods of extreme credit stress,
+precisely when its value is most anomalous.  The probability of non-reporting
+is an increasing function of $|Y_{j,t}^*|$:
+$\P(R_{j,t}=0\mid Y_{j,t}^*)$ is large when $|Y_{j,t}^*|$ is large.
+This is MNAR.  It is arguably the most common pattern in financial data and
+also the hardest to handle: the missingness is informative about the very
+quantity we wish to recover.
+\end{example}
+
+\subsection{Ignorability}
+\label{subsec:ignorability}
+
+A central question is when the missingness mechanism can be \emph{ignored}
+for inference about the data model $\btheta$.
+
+\begin{definition}[Observed-data likelihood]
+\label{def:obs_likelihood}
+The \emph{observed-data likelihood} for $\btheta$ given $\mathcal{H}_T$ is
+\[
+  L(\btheta;\mathcal{H}_T)
+  := \int p\!\bigl(\bY_{1:T}^*;\btheta\bigr)\,
+     p\!\bigl(\bfR_{1:T}\mid\bY_{1:T}^*;\bpsi\bigr)\;
+     d\bY_{1:T}^{mis},
+\]
+obtained by marginalising the joint likelihood over all unobserved values.
+\end{definition}
+
+\begin{proposition}[Ignorability under MAR]
+\label{prop:ignorability}
+Suppose the mechanism is MAR at every $t$ and that the parameters $\btheta$
+and $\bpsi$ are \emph{distinct} in the sense that the parameter space
+factors as $\bm{\Theta}\times\bm{\Psi}$ with no shared components.  Then
+\[
+  L(\btheta;\mathcal{H}_T)
+  \propto p\!\bigl(\bY_{1:T}^{obs};\btheta\bigr),
+\]
+i.e.\ the observed-data likelihood for $\btheta$ equals the marginal
+probability of the observed data under the complete-data model.
+Consequently, maximum-likelihood estimation of $\btheta$ from $\mathcal{H}_T$
+is consistent and asymptotically efficient without modelling $\bpsi$.
+\end{proposition}
+
+\begin{proof}
+Using the recursive factorisation of \Cref{rem:recursive_structure}:
+\begin{align*}
+  L(\btheta,\bpsi;\mathcal{H}_T)
+  &= \int p(\bY^*;\btheta)\prod_{t=1}^T
+     p(\bfR_t\mid\bY_t^*,\mathcal{H}_{t-1};\bpsi)\;d\bY^{mis}.
+\end{align*}
+Under MAR, $p(\bfR_t\mid\bY_t^*,\mathcal{H}_{t-1};\bpsi)
+= p(\bfR_t\mid\bY_t^{obs},\mathcal{H}_{t-1};\bpsi)$, so the mechanism
+factors out of the integral over $\bY^{mis}$:
+\begin{align*}
+  L(\btheta,\bpsi;\mathcal{H}_T)
+  &= \prod_{t=1}^T p(\bfR_t\mid\bY_t^{obs},\mathcal{H}_{t-1};\bpsi)
+     \cdot\int p(\bY^*;\btheta)\;d\bY^{mis} \\
+  &= \underbrace{L(\bpsi;\mathcal{H}_T)}_{\text{mechanism likelihood}}
+     \cdot\underbrace{p(\bY_{1:T}^{obs};\btheta)}_{\text{observed-data model}}.
+\end{align*}
+Under parameter distinctness, maximising the joint likelihood over
+$(\btheta,\bpsi)$ decouples into two separate problems; in particular,
+the maximiser over $\btheta$ equals the maximiser of
+$p(\bY_{1:T}^{obs};\btheta)$.
+\end{proof}
+
+\begin{remark}
+Under MNAR, $p(\bfR_t\mid\bY_t^*;\bpsi)\ne
+p(\bfR_t\mid\bY_t^{obs};\bpsi)$ and the mechanism cannot be factored out.
+Naive maximum-likelihood estimation based on the observed data alone is
+generally biased.  One must either model $\bpsi$ explicitly (a selection
+model approach) or impose structural constraints, such as the use of
+instruments, to achieve identification.
+\end{remark}
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{Causal Imputation and Look-Ahead Bias}
+\label{sec:causal_imputation}
+%%─────────────────────────────────────────────────────────────────────────────
+
+We now formalise the central constraint of this thesis.
+
+\begin{definition}[Imputation rule]
+\label{def:imputation}
+An \emph{imputation rule} is a measurable map that assigns, to each
+$(j,t)$ with $R_{j,t}=0$, a real-valued random variable
+$\hat{Y}_{j,t}$ intended as an estimate of $Y_{j,t}^*$.
+\end{definition}
+
+\begin{definition}[Causal (online) imputation]
+\label{def:causal_imputation}
+An imputation $\hat{Y}_{j,t}$ is \emph{causal}
+(equivalently, \emph{online} or \emph{$\F_t^{obs}$-measurable}) if
+\[
+  \hat{Y}_{j,t} \;\text{is}\; \F_t^{obs}\text{-measurable}
+  \qquad
+  \text{for every }(j,t)\text{ with }R_{j,t}=0.
+\]
+That is, $\hat{Y}_{j,t}$ depends only on data observed at or before time $t$.
+\end{definition}
+
+\begin{definition}[Smoothing (non-causal) imputation]
+\label{def:smoothing_imputation}
+An imputation $\hat{Y}_{j,t}$ is a \emph{smoothing} imputation if it is
+$\F_T^{obs}$-measurable for some $T>t$ but is \emph{not}
+$\F_t^{obs}$-measurable; it uses information from future observations.
+\end{definition}
+
+\begin{example}[Causal vs.\ smoothing: an inventory]
+\label{ex:causal_smoothing}
+\begin{enumerate}[(i)]
+  \item \emph{Last Observation Carried Forward} (LOCF):
+        $\hat{Y}_{j,t}=Y_{j,\tau}^*$ where
+        $\tau=\max\{s<t:R_{j,s}=1\}$.  Causal by construction.
+  \item \emph{Linear interpolation} between the last observation before $t$
+        and the first after $t$ is non-causal: it requires
+        $Y_{j,t'}^*$ for some $t'>t$.
+  \item \emph{Kalman filter} (one-step predictor/update):
+        uses only $\F_t^{obs}$; causal.
+  \item \emph{Kalman smoother}
+        \citep[Ch.~4]{durbin2012}: uses the full-sample
+        $\F_T^{obs}$; non-causal.
+  \item A \emph{bidirectional LSTM}
+        \citep{cao2018}: processes both past and future;
+        non-causal.  Its unidirectional (forward-only) variant is causal.
+\end{enumerate}
+\end{example}
+
+\begin{definition}[Look-ahead bias]
+\label{def:look_ahead_bias}
+Let $\hat{Y}_{j,t}^{sm}$ be a smoothing imputation and
+$\hat{Y}_{j,t}^{cl}$ any causal imputation.  For a downstream quantity
+$f_t(\hat{\bY}_t)$ computed using imputed values at time $t$
+(e.g.\ a portfolio weight, a risk estimate, or a factor loading), the
+\emph{look-ahead bias} is
+\[
+  \mathrm{LAB}_t
+  := \E\!\bigl[f_t(\hat{\bY}_t^{sm})\bigr]
+   - \E\!\bigl[f_t(\hat{\bY}_t^{cl})\bigr].
+\]
+In financial backtesting, look-ahead bias inflates apparent in-sample
+performance and produces results that cannot be replicated in real time.
+\end{definition}
+
+\begin{proposition}[Smoothing dominates causal in-sample; causal is required
+  out-of-sample]
+\label{prop:smoothing_vs_causal}
+Under standard square-integrability, the smoothing imputation
+$\hat{Y}_{j,t}^{sm}=\E[Y_{j,t}^*\mid\F_T^{obs}]$ achieves lower
+mean squared error than any causal imputation:
+\[
+  \E\!\bigl[(Y_{j,t}^*-\hat{Y}_{j,t}^{sm})^2\bigr]
+  \;\le\;
+  \E\!\bigl[(Y_{j,t}^*-\hat{Y}_{j,t}^{cl})^2\bigr].
+\]
+However, in a real-time setting only $\F_t^{obs}$ is available, so
+$\hat{Y}_{j,t}^{sm}$ is \emph{infeasible} and its in-sample advantage is
+entirely attributable to look-ahead bias.
+\end{proposition}
+
+\begin{proof}
+The smoothing estimator is the $L^2$-projection of $Y_{j,t}^*$ onto the
+closed linear subspace of $\F_T^{obs}$-measurable square-integrable random
+variables.  Any causal estimator $\hat{Y}_{j,t}^{cl}$ belongs to the
+$\F_t^{obs}$-measurable subspace, which is a \emph{subspace} of the former
+since $\F_t^{obs}\subseteq\F_T^{obs}$.  The $L^2$-projection onto a smaller
+subspace cannot have smaller residual norm (Pythagoras in Hilbert space), so
+the inequality follows.
+\end{proof}
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{Problem Statement}
+\label{sec:problem_statement}
+%%─────────────────────────────────────────────────────────────────────────────
+
+We are now in a position to state the central problem precisely.
+
+\begin{definition}[Causal imputation problem]
+\label{def:imputation_problem}
+Given:
+\begin{itemize}
+  \item a complete-data process $(\bY_t^*)_{t\in\TT}$,
+  \item an observed-data filtration $(\F_t^{obs})_{t\in\TT}$,
+  \item a loss function $\ell:\R\times\R\to\R_{\ge 0}$,
+\end{itemize}
+the \emph{causal imputation problem} is: for each $(j,t)$ with $R_{j,t}=0$,
+find an $\F_t^{obs}$-measurable random variable $\hat{Y}_{j,t}$ that
+minimises
+\[
+  \E\!\bigl[\ell(\hat{Y}_{j,t},\,Y_{j,t}^*)\mid\F_t^{obs}\bigr].
+\]
+\end{definition}
+
+\begin{proposition}[Oracle causal imputation under squared loss]
+\label{prop:oracle}
+Under $\ell(a,b)=(a-b)^2$, the unique minimiser of
+$\E[(Y_{j,t}^*-\hat{Y}_{j,t})^2\mid\F_t^{obs}]$ over all
+$\F_t^{obs}$-measurable random variables is the conditional expectation
+\[
+  \hat{Y}_{j,t}^{\star} = \E\!\bigl[Y_{j,t}^*\mid\F_t^{obs}\bigr].
+\]
+\end{proposition}
+
+\begin{proof}
+For any $\F_t^{obs}$-measurable $\hat{Y}_{j,t}$, the orthogonality of the
+$L^2$-projection gives
+\begin{align*}
+  \E\!\bigl[(\hat{Y}_{j,t}-Y_{j,t}^*)^2\mid\F_t^{obs}\bigr]
+  &= \bigl(\hat{Y}_{j,t}-\E[Y_{j,t}^*\mid\F_t^{obs}]\bigr)^2
+     +\Var(Y_{j,t}^*\mid\F_t^{obs}).
+\end{align*}
+The first term is non-negative and equals zero if and only if
+$\hat{Y}_{j,t}=\E[Y_{j,t}^*\mid\F_t^{obs}]$.
+\end{proof}
+
+\begin{remark}
+In practice $\E[Y_{j,t}^*\mid\F_t^{obs}]$ is not available in closed form
+unless the complete-data model and missingness mechanism are fully specified
+and analytically tractable.  All algorithms studied in \Cref{ch:methods} can
+be understood as different approximations to this oracle estimator within
+their respective model classes.
+\end{remark}
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{Identifiability}
+\label{sec:identifiability}
+%%─────────────────────────────────────────────────────────────────────────────
+
+Imputation is meaningful only if the complete-data distribution is, at least
+partially, identifiable from the observed data.
+
+\begin{definition}[Identifiability]
+\label{def:identifiability}
+The parameter $\btheta$ is \emph{identifiable} from the observed data if for
+any $\btheta\ne\btheta'$,
+\[
+  p(\bY_{1:T}^{obs};\btheta) \ne p(\bY_{1:T}^{obs};\btheta')
+\]
+with positive probability.
+\end{definition}
+
+\begin{proposition}[Identifiability under MCAR]
+\label{prop:id_mcar}
+Under MCAR, the observed-data marginal satisfies
+$p(\bY^{obs};\btheta)=\int p(\bY^*;\btheta)\,d\bY^{mis}$, and any
+parametric family $\{p(\cdot\,;\btheta)\}$ that is identifiable in the
+complete-data setting remains identifiable from the observed data.
+\end{proposition}
+
+\begin{proposition}[Generic non-identifiability under MNAR]
+\label{prop:nonid_mnar}
+Under MNAR, for any observed-data distribution there exist (generically)
+multiple pairs $(\btheta,\bpsi)$ with different complete-data distributions
+$p(\bY^*;\btheta)$ and different mechanisms $p(\bfR\mid\bY^*;\bpsi)$ that
+are observationally equivalent.  The complete-data distribution is not
+identifiable from observed data alone without additional structural
+restrictions on $\bpsi$.
+\end{proposition}
+
+\begin{remark}
+\Cref{prop:nonid_mnar} has a stark practical consequence: under MNAR, any
+imputation algorithm is making untestable assumptions about the relationship
+between missing values and their own absence.  Sensitivity analysis with
+respect to the assumed mechanism $\bpsi$ is therefore essential whenever
+MNAR cannot be ruled out, as is often the case in financial data
+(\Cref{ex:mnar}).
+\end{remark}
+
+%%─────────────────────────────────────────────────────────────────────────────
+\section{Evaluation Framework}
+\label{sec:evaluation}
+%%─────────────────────────────────────────────────────────────────────────────
+
+\begin{definition}[Test missingness set]
+\label{def:test_set}
+Given a dataset $\{\bY_t^*\}_{t=1}^T$ with fully known ground truth and an
+artificially imposed missingness pattern $\{\bfR_t\}_{t=1}^T$, the
+\emph{test set} is
+\[
+  \mathcal{M}_{test}
+  := \bigl\{(j,t) : R_{j,t}=0\bigr\}.
+\]
+\end{definition}
+
+\begin{definition}[Imputation error metrics]
+\label{def:metrics}
+For a point imputation $\{\hat{Y}_{j,t}\}_{(j,t)\in\mathcal{M}_{test}}$,
+define:
+\begin{align}
+  \mathrm{RMSE}
+  &:= \sqrt{\frac{1}{|\mathcal{M}_{test}|}
+      \sum_{(j,t)\in\mathcal{M}_{test}}
+      \!\!\bigl(\hat{Y}_{j,t} - Y_{j,t}^*\bigr)^2},
+  \label{eq:rmse}\\[6pt]
+  \mathrm{MAE}
+  &:= \frac{1}{|\mathcal{M}_{test}|}
+      \sum_{(j,t)\in\mathcal{M}_{test}}
+      \!\!\bigl|\hat{Y}_{j,t} - Y_{j,t}^*\bigr|,
+  \label{eq:mae}\\[6pt]
+  \mathrm{MAPE}
+  &:= \frac{1}{|\mathcal{M}_{test}|}
+      \sum_{(j,t)\in\mathcal{M}_{test}}
+      \frac{|\hat{Y}_{j,t} - Y_{j,t}^*|}{|Y_{j,t}^*|+\epsilon},
+  \label{eq:mape}
+\end{align}
+where $\epsilon>0$ is a small stability constant.
+\end{definition}
+
+\begin{remark}[Metric choice and heavy tails]
+Since financial returns are heavy-tailed (\Cref{rem:stylized_facts}), RMSE
+is sensitive to extreme observations that may dominate the average.  We
+therefore report both RMSE and MAE in the empirical chapters.  For
+distributional quality we additionally compute the first-order
+\emph{Wasserstein distance} $\mathcal{W}_1(\hat{p},p^*)$ between the
+empirical distributions of imputed and true values \citep{wasserstein2021}.
+\end{remark}
+
+\begin{assumption}[Evaluation protocol]
+\label{ass:eval_protocol}
+Throughout the empirical study we adopt the following protocol:
+\begin{enumerate}[(i)]
+  \item Missingness is \emph{artificially} imposed on an otherwise complete
+        dataset, so ground-truth values are available for evaluation.
+  \item All causal methods observe only $\mathcal{H}_t$ when imputing
+        $Y_{j,t}^*$; the evaluation confirms causality by verifying that no
+        index $t'>t$ appears in the computation graph.
+  \item Performance is reported separately for each mechanism (MCAR, MAR,
+        MNAR) and for multiple missingness rates
+        $\rho\in\{5\%,10\%,20\%,40\%\}$.
+\end{enumerate}
+\end{assumption}

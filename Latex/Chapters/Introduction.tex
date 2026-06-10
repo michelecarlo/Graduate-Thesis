@@ -1,0 +1,288 @@
+\chapter{Introduction}
+\label{chap:introduction}
+% ============================================================
+
+% ============================================================
+\section{Motivation}
+\label{sec:motivation}
+% ============================================================
+
+Financial time series data is never fully observed.
+Limit-order book feeds drop quotes during bursts of order cancellations.
+Equity markets suspend trading when prices move too violently.
+Over-the-counter bond markets leave entire yield-curve tenors unquoted
+for days.
+Implied volatility surfaces contain large regions where no liquid
+option trade has occurred.
+Macro and alternative data arrive at mixed, irregular frequencies, with
+publication lags that create structural gaps at the daily level.
+In every one of these settings a practitioner or a researcher faces
+the same decision: what value should be attributed to the missing
+observation, and how much uncertainty should be attached to that
+attribution?
+
+This question is central for market makers and risk managers.
+For instance, an emerging markets trader could be asked to make a market for
+an highy illiquid instrument that has not traded for several hours or days.
+Depending on the instrument, several approaches are possible: for a bond,
+she could interpolate the missing yield from the rest of the curve; for a
+derivative, she could use her own pricing model and hope that the imputs
+are not too stale.\footnote{Note that here she is faced by the same problem, i.e.
+factors (as $\alpha$, $\beta$, $\rho$ in SABR) that may have not been observed in a some time.}
+The simplest solution is to carry forward the last observed value,
+but this can lead to systematic mispricing, underestimation of risk, and distortion
+of correlations among assets.
+
+We aim to take a different path, one that looks for solutions that minimize a
+loss between the imputed value and the true value, and that preserve as much
+as possible the statistical properties of the series.
+In classical machine learning approach, we want to
+focus on quality of inference rather than interpretability of the model.
+
+Furthermore, and again motivated by practical use cases,
+we insist on a \emph{causal} imputation: the imputed value
+at time $t$ must be based only on information available up to time $t$,
+and not on any future observation. A market maker does not have the luxury of
+looking into an orb to see what the price will be in the next few seconds.
+We formalise this constraint through the language of stochastic
+filtrations, survey and taxonomise the algorithms, from classical
+statistical methods to modern deep generative models,
+and evaluate them empirically on
+representative financial datasets.
+
+% ============================================================
+\section{The Causal Constraint}
+\label{sec:intro_causal}
+% ============================================================
+
+Let us quickly formalise the basics of causal imputation.
+
+Let $(\Omega, \mathcal{G}, \Prob)$ be a probability space and let
+$\mathbb{F} = \{\mathcal{F}_t\}_{t \ge 1}$ be a filtration
+representing the information available to a market participant through
+time.
+An imputation $\hat{X}_t$ of a missing value $X_t$ is causal if and
+only if it is $\mathcal{F}_t$-measurable: it may depend on the
+history $\{Y_s, M_s\}_{s \le t}$ of observed values and missingness
+indicators up to time $t$, but on nothing later.
+
+The theoretical benchmark for any causal imputation is the conditional
+expectation
+\begin{equation}
+    \hat{X}_t^* = \E\!\left[X_t \mid \mathcal{F}_t\right],
+    \label{eq:intro_optimal}
+\end{equation}
+which is the unique $\mathcal{F}_t$-measurable estimator minimising
+mean squared error.
+In the linear Gaussian state-space model this optimum is attained
+exactly by the Kalman filter prediction step.
+For the non-linear, non-Gaussian models that better describe
+financial data, it can only be approximated --- by particle filters,
+recurrent neural networks, or diffusion-based generative models ---
+and a central question is how close each approximation comes, and at
+what computational cost.
+
+The causal constraint also forces a rethinking of widely used
+algorithms.
+Bidirectional recurrent networks such as BRITS
+ fixed-interval Kalman smoothers, standard
+spline interpolation, and the default form of multiple imputation
+by chained equations (MICE,  all condition on
+future observations.
+They can produce excellent imputations in retrospective analysis,
+but they are inadmissible in any live system.
+A secondary contribution of this thesis is a systematic audit of
+each algorithm's inference procedure, identifying which components
+violate the causal constraint and, where possible, deriving a
+restricted variant that does not.
+
+% ============================================================
+\section{Use Cases and Datasets}
+\label{sec:intro_usecases}
+% ============================================================
+
+We organise the empirical investigation around six use cases, each
+representing a distinct type of financial time series and a distinct
+pattern of missingness.
+
+\paragraph{UC\,1 --- Tick and high-frequency data (LOBSTER / TAQ).}
+In a limit-order book, quotes are removed when orders are cancelled
+or modified.
+The resulting gaps in the bid--ask spread and mid-price are
+endogenous to price movement: cancellations cluster around volatile
+episodes, making the mechanism missing not at random (MNAR).
+The causal constraint is most binding here, since even a
+sub-second lookahead constitutes inadmissible information for an
+execution algorithm.
+We use the LOBSTER dataset , which provides
+full ten-level limit-order book snapshots for NASDAQ-listed equities
+under an academic licence, and the Trade and Quote (TAQ) database
+via WRDS for cross-validation.
+
+\paragraph{UC\,2 --- Daily equity prices (CRSP / Yahoo Finance).}
+Trading halts triggered by circuit breakers and regulatory
+suspensions produce gaps of one to five days in the equity price
+record.
+Survivorship bias further distorts panels from which delisted stocks
+have been removed.
+The missingness is conditionally missing at random (MAR) during
+ordinary halts but shifts to MNAR when the halt is caused by
+undisclosed information.
+We use the Center for Research in Security Prices (CRSP) daily
+stock file via WRDS as the primary dataset, with Yahoo Finance
+(\texttt{yfinance} API) as a freely accessible alternative.
+
+\paragraph{UC\,3 --- Fixed income and yield curves (FRED / ECB SDW).}
+Over-the-counter bond markets produce sparse and irregular quote
+streams.
+Off-the-run Treasuries and corporate bonds can go unquoted for
+days, leaving holes in the yield curve that must be filled
+causally for real-time risk systems.
+The missingness pattern ranges from MCAR for the most liquid
+on-the-run maturities to MNAR for illiquid off-the-run tenors,
+where the absence of a quote is itself informative about the
+prevailing liquidity regime.
+We use the FRED daily yield-curve series (US Treasuries, freely
+available via the FRED API) and the ECB Statistical Data Warehouse
+(euro-area sovereign rates) as primary sources.
+
+\paragraph{UC\,4 --- Macro and mixed-frequency data (FRED-MD).}
+Macro series such as GDP, industrial production, and PMI are
+published monthly or quarterly, creating structural gaps at the
+daily frequency required by nowcasting and trading-signal models.
+Sensor failures and API outages additionally introduce irregular
+MCAR gaps.
+The FRED-MD dataset , comprising 128
+monthly US macroeconomic series, is widely used as a benchmark
+in the nowcasting literature, enabling direct comparison with
+published results.
+
+\paragraph{UC\,5 --- FX and cryptocurrency (Binance / Dukascopy).}
+Foreign-exchange and cryptocurrency markets operate around the clock,
+yet liquidity is thin during certain hours or following market stress.
+The resulting OHLCV gaps are MNAR: illiquidity is endogenous to the
+bid--ask spread and realised volatility.
+We use minute-level OHLCV data from the Binance public REST API
+(cryptocurrency) and tick-level foreign-exchange data from the
+Dukascopy free historical data service, both of which can be
+downloaded programmatically without institutional access.
+
+\paragraph{UC\,6 --- Implied volatility surfaces (CBOE / OptionMetrics).}
+Far out-of-the-money and long-dated options are illiquid; many
+(strike, maturity) nodes in the implied volatility surface go
+unquoted on any given day.
+Imputation here is a two-dimensional problem (strike and maturity)
+with the additional constraint that any completed surface must
+respect no-arbitrage conditions: put--call parity and the
+convexity of option prices as a function of strike.
+We use the CBOE VIX term-structure series as a freely available
+proxy and the OptionMetrics IvyDB database via WRDS for the full
+surface.
+
+The six use cases span all three missingness mechanisms, gap lengths
+from one tick to several weeks, and data frequencies from
+millisecond to monthly.
+For tractability, the main empirical chapters focus on
+UC\,2 (daily equities), UC\,3 (yield curves), and UC\,5
+(high-frequency FX/crypto), which collectively cover the most
+practically important settings and the widest methodological range.
+UC\,1 and UC\,6 are treated as extensions in the final chapter.
+
+% ============================================================
+\section{Objectives and Contributions}
+\label{sec:contributions}
+% ============================================================
+
+The thesis makes the following contributions.
+
+\begin{enumerate}
+
+    \item \textbf{A unified causal framework.}
+    We provide a formal definition of causal imputation under a
+    stochastic filtration $\mathbb{F}$, prove the optimality of the
+    conditional expectation $\E[X_t \mid \mathcal{F}_t]$, and
+    introduce the \emph{cost of causality} $\Delta_t$ as the MSE
+    gap between the causal optimum and the acausal smoother.
+    This quantity is estimated empirically for each algorithm and
+    dataset, providing a principled measure of how much predictive
+    information resides in future observations.
+
+    \item \textbf{A taxonomy of causal imputation algorithms.}
+    We survey methods from na\"{i}ve baselines (LOCF) through
+    classical statistical models (ARIMA, exponential smoothing),
+    state-space filters (Kalman, EKF, particle filter), multiple
+    imputation (EM, MICE), classical machine learning (kNN,
+    missForest, Gaussian processes, low-rank completion), and
+    deep learning (GRU-D ,
+    BRITS 
+    Neural ODEs 
+    SAITS
+    GP-VAE 
+    CSDI 
+    For each method we identify whether its standard form is causal,
+    and where it is not, we derive or propose a causal variant.
+
+    \item \textbf{A standardised benchmark under the causal constraint.}
+    We define a rigorous evaluation protocol with a strict causality
+    assumption in evaluation (no algorithm may access $Y_s$ with
+    $s > t$ at test time), standardised missingness injection under
+    MCAR, MAR, and MNAR at missing rates $\rho \in \{0.1, 0.3, 0.5\}$,
+    and a common suite of metrics including RMSE, MAE, MRE, CRPS,
+    and calibration coverage.
+
+    \item \textbf{Empirical results on financial datasets.}
+    We report skill scores relative to the LOCF baseline for all
+    algorithms across UC\,2, UC\,3, and UC\,5, with ablations by
+    gap length, missing rate, and missingness mechanism.
+    Our results quantify the practical cost of the causal constraint
+    and identify which algorithm classes offer the best trade-off
+    between statistical performance and computational feasibility
+    for real-time deployment.
+
+\end{enumerate}
+
+% ============================================================
+\section{Thesis Structure}
+\label{sec:structure}
+% ============================================================
+
+The remainder of the thesis is organised as follows.
+
+\cref{chap:literature} reviews the missing-data and time-series
+imputation literature, situating our work relative to foundational
+contributions in statistics 
+
+\cref{chap:framework} develops the mathematical framework:
+probability-space foundations, Rubin's missingness taxonomy,
+the formal definition of causal imputation, loss functions and
+evaluation criteria, the state-space model and Kalman filter as the
+theoretical gold standard, and extensions to non-linear and
+non-Gaussian settings.
+
+\cref{chap:algorithms} presents the full taxonomy of algorithms,
+organised from na\"{i}ve baselines to deep generative models, with
+a formal causal audit of each method's inference procedure.
+
+\cref{chap:data} describes the datasets corresponding to UC\,2,
+UC\,3, and UC\,5, the missingness-injection methodology, and the
+train/validation/test splitting protocol that enforces the causal
+constraint throughout evaluation.
+
+\cref{chap:experiments} reports and discusses the empirical results,
+including main comparisons, ablations, and an analysis of the
+estimated cost of causality $\Delta_t$ across settings.
+
+\cref{chap:conclusion} concludes with a summary of findings,
+practical recommendations for practitioners, and directions for
+future research, including the extension to UC\,1 (limit-order book)
+and UC\,6 (implied volatility surface) and the open problem of
+causal diffusion-based imputation under $\mathcal{F}_t$.
+
+% ============================================================
+% Bibliography entries specific to the introduction
+% (all entries must be present in references.bib)
+% ============================================================
+
+% New entries to add to references.bib if not already present:
+%   McCrackenNg2016, Huang2011LOBSTER, Fortuin2020GPVAE
+% (see references.bib for existing entries cited above)
