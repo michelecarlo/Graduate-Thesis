@@ -43,7 +43,7 @@ Furthermore, and again motivated by practical use cases,
 we insist on a \emph{causal} imputation: the imputed value
 at time $t$ must be based only on information available up to time $t$,
 and not on any future observation. A market maker does not have the luxury of
-looking into an orb to see what the price will be in the next few seconds.
+looking into a magical orb to see what the price will be in the next few seconds.
 We formalise this constraint through the language of stochastic
 filtrations, survey and taxonomise the algorithms, from classical
 statistical methods to modern deep generative models,
@@ -55,46 +55,40 @@ representative financial datasets.
 \label{sec:intro_causal}
 % ============================================================
 
-Let us quickly formalise the basics of causal imputation.
+Let us quickly formalise basic notation and the notion of causal imputation.
+
+Following \cite{grud}, we denote a multivariate time series with $D$ variables of length $T$ as
+$\mathbf{X}_T = (\mathbf{x}_1, \mathbf{x}_2, \ldots, \mathbf{x}_T)^\top \in \mathbb{R}^{T \times D}$,
+where $\mathbf{x}_t \in \mathbb{R}^D$ represents the $t$-th observations
+(a.k.a., measurements) of all variables and $x_t^d$ denotes the measurement
+of $d$-th variable of $\mathbf{x}_t$. Let $s_t \in \mathbb{R}$ denote the
+time-stamp when the $t$-th observation is obtained and we assume that the
+first observation is made at time $t = 0$ $(s_1 = 0)$.
 
 Let $(\Omega, \mathcal{G}, \Prob)$ be a probability space and let
 $\mathbb{F} = \{\mathcal{F}_t\}_{t \ge 1}$ be a filtration
 representing the information available to a market participant through
 time.
-An imputation $\hat{X}_t$ of a missing value $X_t$ is causal if and
+An imputation $\hat{\mathbf{x}}_t^d$ of a missing value $\mathbf{x}_t^d$ is causal if and
 only if it is $\mathcal{F}_t$-measurable: it may depend on the
-history $\{Y_s, M_s\}_{s \le t}$ of observed values and missingness
+history $\{\mathbf{X}_s, \mathbf{M}_s\}_{s \le t}$ of observed values and missingness
 indicators up to time $t$, but on nothing later.
 
 The theoretical benchmark for any causal imputation is the conditional
 expectation
 \begin{equation}
-    \hat{X}_t^* = \E\!\left[X_t \mid \mathcal{F}_t\right],
+    \hat{\mathbf{x}}_t^* = \E\!\left[\mathbf{x}_t \mid \mathcal{F}_t\right],
     \label{eq:intro_optimal}
 \end{equation}
 which is the unique $\mathcal{F}_t$-measurable estimator minimising
 mean squared error.
 In the linear Gaussian state-space model this optimum is attained
 exactly by the Kalman filter prediction step.
-For the non-linear, non-Gaussian models that better describe
-financial data, it can only be approximated --- by particle filters,
-recurrent neural networks, or diffusion-based generative models ---
-and a central question is how close each approximation comes, and at
-what computational cost.
+For the non-linear, non-Gaussian models that may better describe
+financial data, it can be approximated by recurrent neural networks,
+diffusion-based generative models, or transformer architectures.
 
-The causal constraint also forces a rethinking of widely used
-algorithms.
-Bidirectional recurrent networks such as BRITS
- fixed-interval Kalman smoothers, standard
-spline interpolation, and the default form of multiple imputation
-by chained equations (MICE,  all condition on
-future observations.
-They can produce excellent imputations in retrospective analysis,
-but they are inadmissible in any live system.
-A secondary contribution of this thesis is a systematic audit of
-each algorithm's inference procedure, identifying which components
-violate the causal constraint and, where possible, deriving a
-restricted variant that does not.
+Note the crucial importance of $\sigma (\hat{\mathbf{x}}_t)$ ddd
 
 % ============================================================
 \section{Use Cases and Datasets}
