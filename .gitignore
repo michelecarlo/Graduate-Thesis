@@ -12,3 +12,4 @@
 *.json
 *.synctex
 *.synctex(busy)
+*.pyc
