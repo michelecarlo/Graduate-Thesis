@@ -1,11 +1,29 @@
+% =====================================================================
+%  introduction.tex
+%  Introduction chapter for a thesis on imputation of missing data in
+%  sparse financial panels, evaluated by downstream model quality.
+%
+%  USAGE: This is a chapter FRAGMENT. Do NOT add \documentclass or a
+%  preamble here. Include it from your report-class main.tex, e.g.
+%
+%      \documentclass[12pt]{report}
+%      \usepackage{amsmath,amssymb}     % needed for the math below
+%      % ... your bibliography setup (natbib / biblatex / plain bibtex)
+%      \begin{document}
+%      \include{introduction}           % or \input{introduction.tex}
+%      ...
+%      \end{document}
+%
+%  Citations use the package-agnostic \cite{} so this compiles under
+%  natbib, biblatex, or plain BibTeX. The keys used here are listed at
+%  the end of this file; matching .bib entries are provided separately.
+% =====================================================================
+
 \chapter{Introduction}
 \label{chap:introduction}
-% ============================================================
 
-% ============================================================
 \section{Motivation}
 \label{sec:motivation}
-% ============================================================
 
 Financial time series data is never fully observed.
 Limit-order book feeds drop quotes during bursts of order cancellations.
@@ -28,167 +46,212 @@ Depending on the instrument, several approaches are possible: for a bond,
 she could interpolate the missing yield from the rest of the curve; for a
 derivative, she could use her own pricing model and hope that the imputs
 are not too stale.\footnote{Note that here she is faced by the same problem, i.e.
-factors (as $\alpha$, $\beta$, $\rho$ in SABR) that may have not been observed in a some time.}
+factors (as $\alpha$, $\beta$, $\rho$ in SABR) that may have not been observed in a some time;
+or equivalently missing points in the implied volatility surface}
+A portfolio manager could be asked to compute the optimal weights
+of a portfolio that contains illiquid assets, and she must decide how to treat the
+missing returns in the covariance matrix.
+
 The simplest solution is to carry forward the last observed value,
 but this can lead to systematic mispricing, underestimation of risk, and distortion
 of correlations among assets.
 
-We aim to take a different path, one that looks for solutions that minimize a
-loss between the imputed value and the true value, and that preserve as much
-as possible the statistical properties of the series.
-In classical machine learning approach, we want to
-focus on quality of inference rather than interpretability of the model.
+We aim to take a different path, one that looks for solutions that aim to preserve as much
+as possible the statistical properties of the series, in order to maintain the integrity of
+the underlying data and consequently the robustness of any downstream model that relies on it.
+Since this can be considered an inference problem, we will also explore ML algorithms,
+and in classical machine learning approach, we will
+focus on quality of inference rather than interpretability of the algorithm.
 
-Furthermore, and again motivated by practical use cases,
-we insist on a \emph{causal} imputation: the imputed value
-at time $t$ must be based only on information available up to time $t$,
-and not on any future observation. A market maker does not have the luxury of
-looking into a magical orb to see what the price will be in the next few seconds.
-We formalise this constraint through the language of stochastic
-filtrations, survey and taxonomise the algorithms, from classical
-statistical methods to modern deep generative models,
-and evaluate them empirically on
-representative financial datasets.
+In this thesis we will test these different methods of imputation, and evaluate them not only on the
+accuracy of the imputation itself (MSE,...),
+but also on the quality of the downstream model that uses the imputed data, and how
+different it is from the case where all data is observed.
 
-\section{The Causal Constraint}
-\label{sec:intro_causal}
+\section{Why missingness in finance is hard}
+\label{sec:why-hard}
 
-Let us quickly formalise basic notation and the notion of causal imputation.
+The modern theory of missing data originates with
+\cite{rubin1976}, who classifies the mechanism that generates the gaps.
+Let the complete data be partitioned into observed and missing parts,
+$X = (X_{\text{obs}}, X_{\text{mis}})$, and let $R$ denote the matrix of
+missingness indicators, governed by a conditional law $P(R \mid X,
+\phi)$. The mechanism is \emph{missing completely at random} (MCAR) if
+$R$ is independent of the data, \emph{missing at random} (MAR) if it
+depends only on the observed part $X_{\text{obs}}$, and \emph{missing not
+at random} (MNAR) if it depends on the unobserved values
+$X_{\text{mis}}$ themselves. The practical importance of this taxonomy
+lies in the \emph{ignorability} result: likelihood-based and Bayesian
+inference may ignore the missingness mechanism if and only if the data
+are MAR and the data and mechanism parameters are distinct
+\cite{rubin1976,littlerubin2019}. This is the condition that licenses
+the expectation--maximisation algorithm \cite{dempster1977} and multiple
+imputation \cite{rubin1987} without explicitly modelling $R$.
 
-Following \cite{grud}, we denote a multivariate time series with $D$ variables of length $T$ as
-$\mathbf{X}_T = (\mathbf{x}_1, \mathbf{x}_2, \ldots, \mathbf{x}_T)^\top \in \mathbb{R}^{T \times D}$,
-where $\mathbf{x}_t \in \mathbb{R}^D$ represents the $t$-th observations
-(a.k.a., measurements) of all variables and $x_t^d$ denotes the measurement
-of $d$-th variable of $\mathbf{x}_t$. Let $s_t \in \mathbb{R}$ denote the
-time-stamp when the $t$-th observation is obtained and we assume that the
-first observation is made at time $t = 0$ $(s_1 = 0)$.
+Financial data violates the convenient end of this taxonomy. Missingness
+in returns and fundamentals is typically MNAR and strongly structured:
+it clusters in the cross section and persists over time, and the very
+fact that a value is missing is informative about that value. Returns
+themselves depend on whether data are missing
+\cite{bryzgalova2025}. Two consequences follow directly and motivate the
+methods studied here. First, complete-case analysis conditions on
+survival and on disclosure, producing a sample that is not
+representative of the population of interest. Second, unconditional mean
+imputation, even where it leaves first moments unbiased, attenuates
+estimated variances and covariances toward zero. Because mean--variance
+portfolio selection and risk measurement consume the covariance matrix
+$\Sigma$---and, through the optimiser, its inverse $\Sigma^{-1}$---this
+attenuation corrupts exactly the object the downstream model depends
+upon.
 
-Let $(\Omega, \mathcal{G}, \Prob)$ be a probability space and let
-$\mathbb{F} = \{\mathcal{F}_t\}_{t \ge 1}$ be a filtration
-representing the information available to a market participant through
-time.
-An imputation $\hat{\mathbf{x}}_t^d$ of a missing value $\mathbf{x}_t^d$ is causal if and
-only if it is $\mathcal{F}_t$-measurable: it may depend on the
-history $\{\mathbf{X}_s, \mathbf{M}_s\}_{s \le t}$ of observed values and missingness
-indicators up to time $t$, but on nothing later.
+\section{From imputation to estimation: the downstream view}
+\label{sec:downstream}
 
-The theoretical benchmark for any causal imputation is the conditional
-expectation
-\begin{equation}
-    \hat{\mathbf{x}}_t^d = \E\!\left[\mathbf{x}_t^d \mid \mathcal{F}_t\right],
-    \label{eq:intro_optimal}
-\end{equation}
-which is the unique $\mathcal{F}_t$-measurable estimator minimising
-mean squared error.
-In the linear Gaussian state-space model this optimum is attained
-exactly by the Kalman filter prediction step.
-For the non-linear, non-Gaussian models that may better describe
-financial data, it can be approximated by recurrent neural networks,
-diffusion-based generative models, or transformer architectures.
+The clearest illustration of the downstream view, and the running
+example of this thesis, is mean--variance portfolio selection
+\cite{markowitz1952}, in which the optimal risky portfolio is
+proportional to $\Sigma^{-1}\mu$ for a mean vector $\mu$ and covariance
+$\Sigma$. It is well established that plugging sample estimates into this
+expression performs poorly out of sample: the optimiser behaves as an
+``error maximiser'', loading on assets whose moments are most favourably
+mis-estimated \cite{michaud1989,jobsonkorkie1981}. The estimation-error
+problem is severe enough that a naive equally weighted portfolio is hard
+to beat \cite{demiguel2009}, and a large literature responds with
+regularisation: shrinkage of the covariance matrix
+\cite{ledoitwolf2004,ledoitwolf2017} or equivalent weight constraints
+\cite{jagannathanma2003}.
 
-Note the crucial importance of $\sigma (\mathbf{x}_t)$, the information
-increment between $\mathcal{F}_{t-1}$ and $\mathcal{F}_t$ generated by
-the not missing values of $\mathbf{x}_t$ itself.\footnote{$\sigma (\cdot)$ is a 
-slight abuse of notation since it is not a proper sigma algebra.} Without using
-it, the problem reduces to a purely predictive one, and in my opinion becomes
-close to impossible: financial markets in a certain sense exist because forecasting the
-future is impossible or extremely hard, thus the information density of the $\mathcal{F}_{t-1}$ is very low,
-and $\hat{\mathbf{x}}_t^d$ will be extremely noisy. On the other hand, the
-premise of this thesis is that in some datasets $\sigma (\mathbf{x}_t)$ can be informative
-and useful.
+Imputation enters this picture not as a separate preprocessing step but
+as a further source of regularisation. Filling a return panel with a
+low-rank or factor-based reconstruction shrinks the estimated covariance
+toward a factor structure---the same target used deliberately by
+shrinkage estimators. The choice of imputation method and the choice of
+covariance estimator are therefore not separable, and the error that
+imputation introduces propagates through $\Sigma^{-1}$ into the portfolio
+weights and ultimately into realised performance. This is why
+reconstruction accuracy is an inadequate criterion: it ignores how the
+imputation interacts with the conditioning of the downstream estimator.
+The natural evaluation is instead a two-layer one, comparing methods both
+on reconstruction error and on a downstream objective such as realised
+portfolio variance, Sharpe ratio, or tail risk, with particular interest
+in the configurations where the rankings reverse.
 
-\section{Use Cases and Datasets}
-\label{sec:intro_usecases}
+Mean--variance optimisation is only the leading example. The same
+impute-then-estimate logic governs risk-model estimation and the
+computation of Value-at-Risk and Expected Shortfall; the estimation of
+factor models and cross-sectional return predictors from panels of firm
+characteristics \cite{freyberger2020,chenzimmermann2022}; volatility
+forecasting; macroeconomic nowcasting from mixed-frequency, ragged-edge
+data; the construction of yield curves and implied-volatility surfaces
+from sparsely observed grids; and credit-risk and ESG scoring, where the
+underlying data are both heavily and informatively missing. In each case
+the relevant question is identical: how does the imputation choice change
+the estimate that the practitioner actually uses.
 
-We organise the empirical investigation around six use cases, each
-representing a distinct type of financial time series and a distinct
-pattern of missingness.
+\section{Sparse and illiquid markets}
+\label{sec:emerging}
 
-\paragraph{UC\,1 --- Tick and high-frequency data (LOBSTER / TAQ).}
-In a limit-order book, quotes are removed when orders are cancelled
-or modified.
-The resulting gaps in the bid--ask spread and mid-price are
-endogenous to price movement: cancellations cluster around volatile
-episodes, making the mechanism missing not at random (MNAR).
-The causal constraint is most binding here, since even a
-sub-second lookahead constitutes inadmissible information for an
-execution algorithm.
-We use the LOBSTER dataset , which provides
-full ten-level limit-order book snapshots for NASDAQ-listed equities
-under an academic licence, and the Trade and Quote (TAQ) database
-via WRDS for cross-validation.
+The problem sharpens in emerging and illiquid markets, where it also
+changes in character. The dominant difficulty there is often not an
+explicit missing cell but \emph{staleness}: an asset that does not trade
+still carries a recorded closing price---yesterday's---so the panel can
+appear fully observed while being silently contaminated by repeated
+prices and spurious zero returns. The missingness is in part
+\emph{latent}, inferred rather than flagged, which must be detected
+before it can be addressed, for instance through the proportion of
+zero-return days and related liquidity proxies
+\cite{lesmond1999,amihud2002}. Whether a stale observation should be
+treated as observed or converted to missing is itself a modelling
+decision with downstream consequences.
 
-\paragraph{UC\,2 --- Daily equity prices (CRSP / Yahoo Finance).}
-Trading halts triggered by circuit breakers and regulatory
-suspensions produce gaps of one to five days in the equity price
-record.
-Survivorship bias further distorts panels from which delisted stocks
-have been removed.
-The missingness is conditionally missing at random (MAR) during
-ordinary halts but shifts to MNAR when the halt is caused by
-undisclosed information.
-We use the Center for Research in Security Prices (CRSP) daily
-stock file via WRDS as the primary dataset, with Yahoo Finance
-(\texttt{yfinance} API) as a freely accessible alternative.
+Illiquidity also intensifies the statistical biases of interest.
+Non-trading is more likely in adverse states of the world, so the
+missing observations are disproportionately the extreme ones, which
+inflates estimated means and understates downside risk. Non-synchronous
+prices bias correlations and betas downward and understate volatility, so
+that a portfolio optimiser fed stale data systematically understates risk
+and overstates diversification; standard corrections estimate exposures
+using leads and lags \cite{scholeswilliams1977,dimson1979}. Because the
+characteristic failure mode is the under-statement of risk, evaluation in
+this setting should emphasise realised downside measures rather than
+in-sample Sharpe ratios alone. Finally, illiquidity yields a testable
+prediction that the thesis examines: since the time series of an illiquid
+asset is largely uninformative, cross-sectional and low-rank methods,
+which borrow strength from contemporaneous liquid peers, should outperform
+time-series fillers by a wider margin in emerging markets than in
+developed ones.
 
-\paragraph{UC\,3 --- Fixed income and yield curves (FRED / ECB SDW).}
-Over-the-counter bond markets produce sparse and irregular quote
-streams.
-Off-the-run Treasuries and corporate bonds can go unquoted for
-days, leaving holes in the yield curve that must be filled
-causally for real-time risk systems.
-The missingness pattern ranges from MCAR for the most liquid
-on-the-run maturities to MNAR for illiquid off-the-run tenors,
-where the absence of a quote is itself informative about the
-prevailing liquidity regime.
-We use the FRED daily yield-curve series (US Treasuries, freely
-available via the FRED API) and the ECB Statistical Data Warehouse
-(euro-area sovereign rates) as primary sources.
+\section{Research questions}
+\label{sec:questions}
 
-\paragraph{UC\,4 --- Macro and mixed-frequency data (FRED-MD).}
-Macro series such as GDP, industrial production, and PMI are
-published monthly or quarterly, creating structural gaps at the
-daily frequency required by nowcasting and trading-signal models.
-Sensor failures and API outages additionally introduce irregular
-MCAR gaps.
-The FRED-MD dataset , comprising 128
-monthly US macroeconomic series, is widely used as a benchmark
-in the nowcasting literature, enabling direct comparison with
-published results.
+The thesis is organised around the following questions.
 
-\paragraph{UC\,5 --- FX and cryptocurrency (Binance / Dukascopy).}
-Foreign-exchange and cryptocurrency markets operate around the clock,
-yet liquidity is thin during certain hours or following market stress.
-The resulting OHLCV gaps are MNAR: illiquidity is endogenous to the
-bid--ask spread and realised volatility.
-We use minute-level OHLCV data from the Binance public REST API
-(cryptocurrency) and tick-level foreign-exchange data from the
-Dukascopy free historical data service, both of which can be
-downloaded programmatically without institutional access.
+\begin{enumerate}
+  \item To what extent does the ranking of imputation methods by
+        reconstruction accuracy differ from their ranking by downstream
+        model quality, and under what conditions do the two diverge?
+  \item How do these rankings depend on the missingness mechanism
+        (MCAR, MNAR, and clustered or persistent patterns) and on the
+        fraction of data that is missing?
+  \item How should the impute-then-estimate pipeline be adapted to
+        emerging and illiquid markets, where staleness and
+        non-synchronous trading dominate, and does the predicted
+        advantage of cross-sectional methods materialise there?
+  \item How can the uncertainty introduced by imputation be propagated
+        honestly into the downstream estimate rather than ignored?
+\end{enumerate}
 
-\paragraph{UC\,6 --- Implied volatility surfaces (CBOE / OptionMetrics).}
-Far out-of-the-money and long-dated options are illiquid; many
-(strike, maturity) nodes in the implied volatility surface go
-unquoted on any given day.
-Imputation here is a two-dimensional problem (strike and maturity)
-with the additional constraint that any completed surface must
-respect no-arbitrage conditions: put--call parity and the
-convexity of option prices as a function of strike.
-We use the CBOE VIX term-structure series as a freely available
-proxy and the OptionMetrics IvyDB database via WRDS for the full
-surface.
-
-The six use cases span all three missingness mechanisms, gap lengths
-from one tick to several weeks, and data frequencies from
-millisecond to monthly.
-For tractability, the main empirical chapters focus on
-UC\,2 (daily equities), UC\,3 (yield curves), and UC\,5
-(high-frequency FX/crypto), which collectively cover the most
-practically important settings and the widest methodological range.
-UC\,1 and UC\,6 are treated as extensions in the final chapter.
-
-\section{Objectives and Contributions}
+\section{Contributions}
 \label{sec:contributions}
 
-\section{Thesis Structure}
-\label{sec:structure}
+In addressing these questions the thesis makes the following
+contributions.
+
+\begin{enumerate}
+  \item It formalises and empirically documents the gap between
+        imputation accuracy and downstream utility, exhibiting concrete
+        rank reversals in which the most accurate imputation does not
+        yield the best downstream estimate.
+  \item It develops a controlled experimental methodology in which a
+        fully observed panel serves as ground truth (an \emph{oracle}):
+        entries are deleted under a chosen mechanism, imputed, and scored
+        on both layers, with the missingness mechanism treated as an
+        explicit experimental factor.
+  \item It enforces point-in-time discipline throughout, imputing and
+        estimating using only information available at each date, and it
+        quantifies the look-ahead bias incurred when this discipline is
+        relaxed.
+  \item It propagates imputation uncertainty into the downstream estimate
+        via multiple imputation and Rubin's combination rules
+        \cite{rubin1987,meng1994}, in contrast to single imputation,
+        which understates that uncertainty.
+  \item It adapts the framework to illiquid and emerging markets through
+        staleness detection, mechanism-aware masking, and risk
+        estimators robust to non-synchronous trading, and tests the
+        resulting predictions empirically.
+\end{enumerate}
+
+\section{Outline of the thesis}
+\label{sec:outline}
+
+The remainder of the thesis is organised as follows.
+Chapter~\ref{chap:introduction} has motivated the problem and stated the
+research questions. The following chapter reviews the relevant
+literature, spanning the statistical theory of missing data, low-rank
+matrix completion \cite{candesrecht2009,mazumder2010}, and the
+econometrics of portfolio estimation error. The subsequent chapter sets
+out the methodology: the data, the missingness mechanisms, the imputation
+methods under comparison, the downstream estimators, and the two-layer
+evaluation. A further chapter reports the empirical results across
+mechanisms and missing rates, including the emerging-market case. The
+final chapter discusses the findings, their limitations, and directions
+for future work.
+
+% ---------------------------------------------------------------------
+% Citation keys used above (define these in your .bib file):
+%   rubin1976, littlerubin2019, dempster1977, rubin1987, meng1994,
+%   markowitz1952, michaud1989, jobsonkorkie1981, demiguel2009,
+%   ledoitwolf2004, ledoitwolf2017, jagannathanma2003, candesrecht2009,
+%   mazumder2010, bryzgalova2025, chenzimmermann2022, freyberger2020,
+%   lesmond1999, amihud2002, scholeswilliams1977, dimson1979
+% ---------------------------------------------------------------------
