@@ -34,25 +34,13 @@ Implied volatility surfaces contain large regions where no liquid
 option trade has occurred.
 Macro and alternative data arrive at mixed, irregular frequencies, with
 publication lags that create structural gaps at the daily level.
-In every one of these settings a practitioner or a researcher faces
+This missing data is pervasive and often elusive, and gets in the way
+of advanced analysis. Thus practitioners or a researchers face
 the same decision: what value should be attributed to the missing
 observation, and how much uncertainty should be attached to that
 attribution?
 
-This question is central for market makers and risk managers.
-For instance, an emerging markets trader could be asked to make a market for
-an highy illiquid instrument that has not traded for several hours or days.
-Depending on the instrument, several approaches are possible: for a bond,
-she could interpolate the missing yield from the rest of the curve; for a
-derivative, she could use her own pricing model and hope that the imputs
-are not too stale.\footnote{Note that here she is faced by the same problem, i.e.
-factors (as $\alpha$, $\beta$, $\rho$ in SABR) that may have not been observed in a some time;
-or equivalently missing points in the implied volatility surface}
-A portfolio manager could be asked to compute the optimal weights
-of a portfolio that contains illiquid assets, and she must decide how to treat the
-missing returns in the covariance matrix.
-
-The simplest solution is to carry forward the last observed value,
+The simplest and most common solution is to carry forward the last observed value,
 but this can lead to systematic mispricing, underestimation of risk, and distortion
 of correlations among assets.
 
@@ -61,15 +49,15 @@ as possible the statistical properties of the series, in order to maintain the i
 the underlying data and consequently the robustness of any downstream model that relies on it.
 Since this can be considered an inference problem, we will also explore ML algorithms,
 and in classical machine learning approach, we will
-focus on quality of inference rather than interpretability of the algorithm.
+focus on quality of inference rather than interpretability of the model.
 
 In this thesis we will test these different methods of imputation, and evaluate them not only on the
 accuracy of the imputation itself (MSE,...),
 but also on the quality of the downstream model that uses the imputed data, and how
-different it is from the case where all data is observed.
+far it deviates from the case where all data is observed.
 
-\section{Why missingness in finance is hard}
-\label{sec:why-hard}
+\section{Literature review}
+\label{sec:literature}
 
 The modern theory of missing data originates with
 \cite{rubin1976}, who classifies the mechanism that generates the gaps.
@@ -184,74 +172,10 @@ developed ones.
 \section{Research questions}
 \label{sec:questions}
 
-The thesis is organised around the following questions.
-
-\begin{enumerate}
-  \item To what extent does the ranking of imputation methods by
-        reconstruction accuracy differ from their ranking by downstream
-        model quality, and under what conditions do the two diverge?
-  \item How do these rankings depend on the missingness mechanism
-        (MCAR, MNAR, and clustered or persistent patterns) and on the
-        fraction of data that is missing?
-  \item How should the impute-then-estimate pipeline be adapted to
-        emerging and illiquid markets, where staleness and
-        non-synchronous trading dominate, and does the predicted
-        advantage of cross-sectional methods materialise there?
-  \item How can the uncertainty introduced by imputation be propagated
-        honestly into the downstream estimate rather than ignored?
-\end{enumerate}
 
 \section{Contributions}
 \label{sec:contributions}
 
-In addressing these questions the thesis makes the following
-contributions.
-
-\begin{enumerate}
-  \item It formalises and empirically documents the gap between
-        imputation accuracy and downstream utility, exhibiting concrete
-        rank reversals in which the most accurate imputation does not
-        yield the best downstream estimate.
-  \item It develops a controlled experimental methodology in which a
-        fully observed panel serves as ground truth (an \emph{oracle}):
-        entries are deleted under a chosen mechanism, imputed, and scored
-        on both layers, with the missingness mechanism treated as an
-        explicit experimental factor.
-  \item It enforces point-in-time discipline throughout, imputing and
-        estimating using only information available at each date, and it
-        quantifies the look-ahead bias incurred when this discipline is
-        relaxed.
-  \item It propagates imputation uncertainty into the downstream estimate
-        via multiple imputation and Rubin's combination rules
-        \cite{rubin1987,meng1994}, in contrast to single imputation,
-        which understates that uncertainty.
-  \item It adapts the framework to illiquid and emerging markets through
-        staleness detection, mechanism-aware masking, and risk
-        estimators robust to non-synchronous trading, and tests the
-        resulting predictions empirically.
-\end{enumerate}
 
 \section{Outline of the thesis}
 \label{sec:outline}
-
-The remainder of the thesis is organised as follows.
-Chapter~\ref{chap:introduction} has motivated the problem and stated the
-research questions. The following chapter reviews the relevant
-literature, spanning the statistical theory of missing data, low-rank
-matrix completion \cite{candesrecht2009,mazumder2010}, and the
-econometrics of portfolio estimation error. The subsequent chapter sets
-out the methodology: the data, the missingness mechanisms, the imputation
-methods under comparison, the downstream estimators, and the two-layer
-evaluation. A further chapter reports the empirical results across
-mechanisms and missing rates, including the emerging-market case. The
-final chapter discusses the findings, their limitations, and directions
-for future work.
-
-% ---------------------------------------------------------------------
-% Citation keys used above (define these in your .bib file):
-%   rubin1976, littlerubin2019, dempster1977, rubin1987, meng1994,
-%   markowitz1952, michaud1989, jobsonkorkie1981, demiguel2009,
-%   ledoitwolf2004, ledoitwolf2017, jagannathanma2003, candesrecht2009,
-%   mazumder2010, bryzgalova2025, chenzimmermann2022, freyberger2020,
-%   lesmond1999, amihud2002, scholeswilliams1977, dimson1979
-% ---------------------------------------------------------------------
