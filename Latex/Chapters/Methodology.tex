@@ -1,2 +1,46 @@
 \chapter{Methodology}
 \label{ch:methodology}
+
+As already mentioned, missing data can arise in countless different ways,
+and the choice of methodology depends on the nature of the missingness, the type of data,
+and the specific goals of the analysis. We will focus on a subset
+of cases, namely those that involve imputation of the missing values with
+"information" from the whole dataset (no causal constraint), with in mind
+the goal of training a downstream model that is as close as possible to
+the one that would have been trained on the complete dataset.
+Our choice of data, models, and evaluation methods will be guided
+by these constraints. We will nevertheless mention when/how models should
+be tweaked to solve adjacent problems.
+
+\section{Data}
+\label{sec:data}
+
+As our main baseline, we chose the most studied and reliable dataset in finance:
+the end-of-day prices of the S\&P500, in this case fetched with yfinance from
+1/1/2010 to 30/5/2026 (potrei cambiare le date). It clearly is not a dataset inflicted
+with the curse of missing data; the only structural ones being occasional circuit breaks
+and listings/delistings from the index. To obtain a full dataset with no "real"
+missing data, we removed each stock that contained at least one missing observation.
+Furthermore, we selected a sample of 50 stocks from the index, stratified across industries;
+this is a sensible choice because:
+\begin{enumerate}
+    \item with more 400 stocks the covariance matrix $\Sigma$ quickly becomes unreliable (noisy covariances,
+    skewed eigenvalues, unstable inversion\dots) as the number of observations shrinks;
+    \item it is easier to check whether the ground data is actually correct;
+    \item model training requires considerably less memory, in a time where RAM and GPU prices are 
+    skyrocketing;
+    \item it is well known that a well constructed portfolio with more than 30 stocks is already
+    sufficiently diversified (since volatility scales with the inverse of the square root of the number of securities).
+\end{enumerate}
+
+This dataset will serve as the ground truth against which we will compare our results.
+In parallel, we will modify it by inserting fake missing observations according to different
+rules, as we define in the subsequent sections.
+Now an important choice is whether to operate in the prices "space" or the returns space.
+There are positives and negatives about each. For one, the raw dataset is prices, and
+in practice missing data will come in the form of missing prices.
+\section{Models}
+\label{sec:models}
+
+\section{Evaluation Methods}
+\label{sec:eval}
