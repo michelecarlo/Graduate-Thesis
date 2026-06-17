@@ -7,15 +7,14 @@
 %%─── Encoding & fonts ────────────────────────────────────────────────────────
 \usepackage[T1]{fontenc}
 \usepackage[utf8]{inputenc}
-\usepackage{lmodern}
+\usepackage{lmodern}  % sans-serif font (Helvetica)
 \usepackage{microtype}
 
 %%─── Page layout ─────────────────────────────────────────────────────────────
 \usepackage[
   a4paper,
-  top=3cm, bottom=3cm,
-  inner=3.5cm, outer=2.5cm,
-  headheight=15pt
+  top=2.5cm, bottom=2.5cm,
+  left=2.5cm, right=2.5cm,
 ]{geometry}
 \usepackage{setspace}
 \onehalfspacing
@@ -143,61 +142,52 @@
 %%─── Document begins ──────────────────────────────────────────────────────────
 \begin{document}
 
-%%━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-%% TITLE PAGE
-%%━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-\begin{titlepage}
-  \centering
-  \vspace*{1.5cm}
-  {\scshape\Large Master's Thesis\par}
-  \vspace{0.8cm}
-  \rule{\linewidth}{0.5pt}\\[0.4cm]
-  {\huge\bfseries Online Imputation of Missing Data\\[0.4cm]
-   in Financial Time Series\par}
-  \rule{\linewidth}{0.5pt}\\[1.8cm]
-
-  \begin{minipage}{0.46\textwidth}
-    \begin{flushleft}
-      \large\textit{Author:}\\[2pt]
-      \textbf{Michele Carlo Fanelli}
-    \end{flushleft}
-  \end{minipage}\hfill
-  \begin{minipage}{0.46\textwidth}
-    \begin{flushright}
-      \large\textit{Supervisor:}\\[2pt]
-      \textbf{Francesco Corielli}\\[8pt]
-    \end{flushright}
-  \end{minipage}
-
-  \vfill
-  {\large
-    Bocconi University\\[4pt]
-    %[Department / School of Mathematics, Statistics, or Finance]\\[12pt]
-    Academic Year 2025/2026
-  \par}
-\end{titlepage}
 
 %%━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-%% FRONT MATTER
+%% FRONT MATTER — Acknowledgements
 %%━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-\pagenumbering{roman}
+\thispagestyle{empty}
+\null
+\clearpage
 
-%% --- Abstract ---------------------------------------------------------------
-\include{Chapters/Abstract}
+\thispagestyle{empty}
+\null
+\clearpage
 
-\cleardoublepage
+%% --- Acknowledgements page -------------------------------------------------
+\thispagestyle{empty}
+\vspace*{\fill}
+\begin{center}
+	{\Large\itshape Acknowledgements}
+\end{center}
+\vspace{2em}
+\begin{center}
+\begin{minipage}{0.8\textwidth}
+\itshape
+....
+\end{minipage}
+\end{center}
+\vspace*{\fill}
+\clearpage
+
+%% --- Intentionally blank page ----------------------------------------------
+\thispagestyle{empty}
+\null
+\clearpage
+
 
 %% --- Contents / figures / tables -------------------------------------------
+
 \tableofcontents
-\cleardoublepage
+\thispagestyle{empty}
+\clearpage
 
-\listoffigures
-\addcontentsline{toc}{chapter}{List of Figures}
-\cleardoublepage
+\thispagestyle{empty}
+\null
+\clearpage
 
-\listoftables
-\addcontentsline{toc}{chapter}{List of Tables}
-\cleardoublepage
+
+
 
 %%━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 %% MAIN MATTER
@@ -242,5 +232,13 @@
 \cleardoublepage
 \addcontentsline{toc}{chapter}{Bibliography}
 \bibliography{references}
+
+\listoffigures
+\addcontentsline{toc}{chapter}{List of Figures}
+\cleardoublepage
+
+\listoftables
+\addcontentsline{toc}{chapter}{List of Tables}
+\cleardoublepage
 
 \end{document}
