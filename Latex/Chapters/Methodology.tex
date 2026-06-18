@@ -24,7 +24,7 @@ missing data, we removed each stock that contained at least one missing observat
 Furthermore, we selected a sample of 50 stocks from the index, stratified across industries;
 this is a sensible choice because:
 \begin{enumerate}
-    \item with more 400 stocks the covariance matrix $\Sigma$ quickly becomes unreliable (noisy covariances,
+    \item with more 400 stocks the covariance matrix $\bSigma$ quickly becomes unreliable (noisy covariances,
     skewed eigenvalues, unstable inversion\dots) as the number of observations shrinks;
     \item it is easier to check whether the ground data is actually correct;
     \item model training requires considerably less memory, in a time where RAM and GPU prices are 
@@ -36,11 +36,91 @@ this is a sensible choice because:
 This dataset will serve as the ground truth against which we will compare our results.
 In parallel, we will modify it by inserting fake missing observations according to different
 rules, as we define in the subsequent sections.
-Now an important choice is whether to operate in the prices "space" or the returns space.
+
+Now an important choice is whether to operate in the prices "space" $P_t$ or the log returns space $R_t$.
 There are positives and negatives about each. For one, the raw dataset is prices, and
-in practice missing data will come in the form of missing prices.
+in practice missing data will mostly come in the form of missing prices. Furthermore,
+in most applications we care slightly more about prices than returns, since the formers are
+what is actually bought and sold.
+But $P_t$ has the drawback of not being a complete space ($p_{t,k} > 0 $) and being highly level dependant,
+making the series non-stationary and very difficult for ML algorithms to handle.
+We will thus focus on $R_t$.
+
+\subsection{Missingness Injection}
+\label{sec:missingness}
+
+(Da scrivere meglio, questa è solo l'outline)
+
+\FloatBarrier
+As outlined in the literature review \dots
+
+We used three algorithms to simulate different missingness patterns:
+
+\begin{enumerate}
+    \item \textbf{Sparse}: each scalar $r_{t,k}$ is missing with probability $r$, independent of the rest
+    of the dataset. This is the easiest example of MCAR and can simulate a randomly corrupted dataset;
+    \item \textbf{Contiguous gaps}: a point $r_{t,k}$ is chosen at random and eliminated. Then subsequent observations
+    of the same variable $r_{t+1,k}$, \dots, $r_{t+h,k}$ get deleted according to an exponential decay
+    with rate $\lambda$. This is still an example of MCAR and can be thought to simulate assets
+    failing to trade because of random shortages of liquidity;
+    \item \textbf{Stressed}: we calculate index squared returns for each date $t$ and rank them. Then,
+    returns whose date is above a certain percentile get deleted with probability $h$, while the rest
+    still go missing with rate $r$. This simulates shortages of liquidity or circuit breaks that happen
+    when markets experience high levels of volatility; since the missingness of a given
+    $r_{t,k}$ is injected conditional on all the other values of the dataset, this is an example of MNAR.
+    
+\end{enumerate}
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\textwidth]{Figures/missingness_examples.pdf}
+  \caption{Missingness Examples}
+  \label{fig:missingness}
+\end{figure}
+
+
+
+
 \section{Models}
 \label{sec:models}
 
+\subsection{Deletion}
+Deletes rows where at least one missing value is found
+
+\subsection{Inserting zeroes}
+
+Consists in setting each missing return to zero. this is equivalent to setting the missing price
+to be equal to the last observed price.
+
+\subsection{EM}
+With student-t
+
+\cite{dempster1977}
+
+\subsection{KNN}
+
+
+
+\subsection{BRITS}
+
+\cite{cao2018}
+
+\subsection{SAITS}
+
+\cite{du2023}
+
+
 \section{Evaluation Methods}
 \label{sec:eval}
+
+MSE
+
+MAEa
+
+CovErr = \[
+\frac{\lVert \widehat{\Sigma}_{\mathrm{imp}} - \Sigma_{\mathrm{true}} \rVert}
+     {\lVert \Sigma_{\mathrm{true}} \rVert}
+\]
+
+
+VaR
