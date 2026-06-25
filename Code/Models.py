@@ -1,249 +1,258 @@
-"""Reusable imputation models for a daily log-return panel of shape ``(T, N)``.
+"""Missing-data imputers for financial log-return panels.
 
-The module exposes a small, scikit-learn-like family of imputers used to compare
-how different missing-data methods reconstruct financial time-series panels.  A
-complete return matrix is meant to be artificially masked elsewhere, imputed with
-one of these models, and then evaluated (MSE, covariance/volatility preservation,
-forecasting, portfolio metrics) in a separate script.
+Every imputer follows the same small scikit-learn-style interface::
 
-Every model follows the same minimal interface::
+    model.fit(X)              # learn parameters from X
+    Xfilled = model.transform(X)
+    Xfilled = model.fit_transform(X)
 
-    model = ModelName(**params)
-    model.fit(X_train)
-    X_imp = model.transform(X)
-    X_imp = model.fit_transform(X_train)
+``X`` is a ``(T, N)`` panel (``pandas.DataFrame`` or ``numpy`` array) of
+``T`` time steps and ``N`` assets, with ``numpy.nan`` marking the missing
+entries.  Unless noted, ``transform`` returns a **complete** ``(T, N)`` array
+in which the originally observed cells are preserved exactly and only the
+missing cells are filled.
 
-``X`` is a 2D NumPy array or pandas DataFrame with missing values encoded as
-``np.nan``.  All models return NumPy arrays.  Except for ``DeletionImputer`` the
-output keeps the input shape and preserves observed entries exactly.
+Implemented here, from the ground up:
 
-Models (in fixed order):
-    1. DeletionImputer       -- naive baseline, drops incomplete rows/columns
-    2. StudentTEMImputer     -- multivariate Student-t EM (heavy-tailed returns)
-    3. KNNReturnImputer      -- nonparametric KNN baseline
-    4. BRITSImputer          -- recurrent (bidirectional) deep imputation
-    5. SAITSImputer          -- self-attention deep imputation
-    6. CSDIImputer           -- conditional diffusion deep imputation
+    DeletionImputer  -- drop every row that contains a missing value
+    ZeroImputer      -- replace missing entries with 0 (the "no move" return)
+    EMImputer        -- Gaussian expectation-maximisation (Little & Rubin)
+    KNNImputer       -- k-nearest-neighbour fill on co-observed features
+    BRITSImputer     -- Bidirectional Recurrent Imputation (PyTorch)
+    CSDIImputer      -- Conditional Score-based Diffusion Imputation (PyTorch)
 
-The deep-learning models are thin wrappers around PyPOTS implementations and are
-imported lazily, so the module is usable even when PyPOTS is absent.
+The two neural models (BRITS, CSDI) are written in PyTorch.  They are
+deliberately compact -- faithful to the published architectures but small
+enough to train on CPU.
 """
+
+from __future__ import annotations
+
+import math
 
 import numpy as np
 import pandas as pd
-from sklearn.impute import KNNImputer
+import torch
+import torch.nn as nn
 
 __all__ = [
     "DeletionImputer",
-    "StudentTEMImputer",
-    "KNNReturnImputer",
+    "ZeroImputer",
+    "EMImputer",
+    "KNNImputer",
     "BRITSImputer",
-    "SAITSImputer",
     "CSDIImputer",
 ]
 
 
 # --------------------------------------------------------------------------- #
-# Input / output helpers
+# Helpers
 # --------------------------------------------------------------------------- #
 def _to_numpy(X):
-    """Return a float NumPy copy of ``X`` (accepts DataFrame or ndarray)."""
+    """Return ``X`` as a float64 ``numpy`` array with NaNs intact."""
     if isinstance(X, pd.DataFrame):
         X = X.to_numpy()
-    return np.array(X, dtype=float, copy=True)
+    return np.asarray(X, dtype=float)
 
 
-def _to_3d(X):
-    """Reshape a 2D panel ``(T, N)`` into the ``(1, T, N)`` batch PyPOTS expects."""
-    X = _to_numpy(X)
-    return X.reshape(1, X.shape[0], X.shape[1])
+def _standardize(X, observed):
+    """Per-asset standardisation using observed entries only.
 
-
-def _from_3d(X_3d):
-    """Collapse a ``(n_samples, T, N)`` backend output back to ``(T, N)``."""
-    X_3d = np.asarray(X_3d)
-    if X_3d.ndim == 3:
-        return X_3d[0]
-    return X_3d
-
-
-def _preserve_observed(X_original, X_imputed):
-    """Overwrite imputed entries with the original observed values where present."""
-    X_original = _to_numpy(X_original)
-    out = np.asarray(X_imputed, dtype=float).copy()
-    observed = ~np.isnan(X_original)
-    out[observed] = X_original[observed]
-    return out
-
-
-# --------------------------------------------------------------------------- #
-# 1. Deletion baseline
-# --------------------------------------------------------------------------- #
-class DeletionImputer:
-    """Naive complete-case baseline -- it discards incomplete observations.
-
-    Deletion is not a real imputation method: it shows what happens when rows or
-    columns containing any missing value are simply dropped.  It therefore
-    changes the shape of the dataset and is *not* directly comparable with the
-    shape-preserving imputers; it is included only as a reference point.
-
-    Parameters
-    ----------
-    strategy : {"row", "column"}
-        ``"row"`` removes every row with at least one missing value;
-        ``"column"`` removes every column with at least one missing value.
+    Returns the standardised panel (missing cells set to 0), plus the mean
+    and std used, so the result can be mapped back to the original scale.
     """
+    masked = np.where(observed, X, np.nan)
+    mu = np.nanmean(masked, axis=0)
+    sd = np.nanstd(masked, axis=0)
+    mu = np.nan_to_num(mu, nan=0.0)
+    sd = np.where((sd == 0) | np.isnan(sd), 1.0, sd)
+    Xs = np.where(observed, (X - mu) / sd, 0.0)
+    return Xs, mu, sd
 
-    def __init__(self, strategy="row"):
-        if strategy not in ("row", "column"):
-            raise ValueError("strategy must be 'row' or 'column'")
-        self.strategy = strategy
+
+def _to_windows(arr, length, stride=None):
+    """Cut a ``(T, ...)`` array into ``(n_windows, length, ...)`` blocks.
+
+    With ``stride is None`` (or ``stride >= length``) the windows tile the series
+    without overlap, zero-padding the end so its length is a multiple of
+    ``length`` -- used at reconstruction time, where every step is filled once.
+    With ``stride < length`` the windows overlap, yielding many more densely
+    sampled training windows (a final window flush with the end is appended so
+    the tail is covered).  Returns the windows and the padding added (0 when
+    overlapping).
+    """
+    T = arr.shape[0]
+    if stride is None or stride >= length:
+        pad = (-T) % length
+        if pad:
+            arr = np.concatenate([arr, np.zeros((pad,) + arr.shape[1:], arr.dtype)], axis=0)
+        return arr.reshape(-1, length, *arr.shape[1:]), pad
+    starts = list(range(0, T - length + 1, stride))
+    if not starts or starts[-1] != T - length:
+        starts.append(T - length)
+    return np.stack([arr[s:s + length] for s in starts], axis=0), 0
+
+
+def _from_windows(win, T):
+    """Inverse of :func:`_to_windows`; keep the first ``T`` rows."""
+    flat = win.reshape(-1, win.shape[-1])
+    return flat[:T]
+
+
+class _BaseImputer:
+    """Shared ``fit_transform`` glue."""
 
     def fit(self, X, y=None):
         return self
 
     def transform(self, X):
-        X = _to_numpy(X)
-        missing = np.isnan(X)
-        if self.strategy == "row":
-            return X[~missing.any(axis=1)]
-        return X[:, ~missing.any(axis=0)]
+        raise NotImplementedError
 
     def fit_transform(self, X, y=None):
         return self.fit(X).transform(X)
 
+    def _log(self, epoch, loss):
+        """Record an epoch's mean training loss (and optionally print it)."""
+        self.loss_history_.append(loss)
+        if getattr(self, "verbose", False):
+            every = max(1, self.epochs // 10)
+            if epoch == 0 or (epoch + 1) % every == 0:
+                name = type(self).__name__.replace("Imputer", "")
+                print(f"{name:5s} epoch {epoch + 1:4d}/{self.epochs}  loss {loss:.5f}")
+
 
 # --------------------------------------------------------------------------- #
-# 2. Multivariate Student-t EM imputer
+# 1. Deletion
 # --------------------------------------------------------------------------- #
-class StudentTEMImputer:
-    """Model-based imputer assuming a multivariate Student-t return vector.
+class DeletionImputer(_BaseImputer):
+    """Complete-case analysis: drop every row holding at least one NaN.
 
-    Financial returns are heavy-tailed, so a Student-t model is more robust than
-    a Gaussian one.  Fitting uses an EM scheme that treats the t-distribution as
-    a Gaussian scale mixture: each observation receives a weight that downplays
-    extreme rows, and missing entries are filled by their conditional
-    expectation under the current location ``mu_`` and scatter ``Sigma_``.
-
-    Parameters
-    ----------
-    max_iter : int
-        Maximum number of EM iterations.
-    tol : float
-        Convergence tolerance on the change of ``mu_`` / ``Sigma_``.
-    nu : float
-        Degrees of freedom of the Student-t (smaller => heavier tails).
-    ridge : float
-        Diagonal loading added to ``Sigma_`` for numerical stability.
-
-    Attributes
-    ----------
-    mu_ : ndarray of shape (N,)
-        Estimated location vector.
-    Sigma_ : ndarray of shape (N, N)
-        Estimated scatter (scale) matrix.
+    This is the only imputer that changes the panel shape -- the result has
+    ``(T', N)`` rows with ``T' <= T`` and no missing values.
     """
 
-    def __init__(self, max_iter=100, tol=1e-5, nu=5.0, ridge=1e-6):
+    def transform(self, X):
+        X = _to_numpy(X)
+        keep = ~np.isnan(X).any(axis=1)
+        return X[keep]
+
+
+# --------------------------------------------------------------------------- #
+# 2. Zero fill
+# --------------------------------------------------------------------------- #
+class ZeroImputer(_BaseImputer):
+    """Replace every missing entry with 0 (a flat, "no change" log return)."""
+
+    def transform(self, X):
+        X = _to_numpy(X)
+        return np.where(np.isnan(X), 0.0, X)
+
+
+# --------------------------------------------------------------------------- #
+# 3. Gaussian EM
+# --------------------------------------------------------------------------- #
+class EMImputer(_BaseImputer):
+    """Expectation-maximisation under a multivariate-normal model.
+
+    Each row is treated as an i.i.d. draw from ``N(mu, Sigma)``.  The E-step
+    fills missing entries with their conditional expectation given the
+    observed ones; the M-step re-estimates ``mu`` and ``Sigma`` (including the
+    conditional-covariance correction).  Rows are grouped by missingness
+    pattern so each pattern needs a single matrix solve per iteration.
+    """
+
+    def __init__(self, max_iter=50, tol=1e-4, ridge=1e-6, verbose=False):
         self.max_iter = max_iter
         self.tol = tol
-        self.nu = nu
         self.ridge = ridge
+        self.verbose = verbose
 
     def fit(self, X, y=None):
         X = _to_numpy(X)
         T, N = X.shape
-        obs = ~np.isnan(X)
-        eye = self.ridge * np.eye(N)
+        observed = ~np.isnan(X)
 
-        # Initialise from column means / sample covariance of mean-filled data.
-        col_mean = np.nanmean(X, axis=0)
-        col_mean = np.where(np.isnan(col_mean), 0.0, col_mean)
-        filled = np.where(obs, np.nan_to_num(X), col_mean)
-        mu = filled.mean(axis=0)
-        Sigma = np.atleast_2d(np.cov(filled, rowvar=False)) + eye
-        nu = self.nu
+        mu = np.nan_to_num(np.nanmean(np.where(observed, X, np.nan), axis=0))
+        Xf = np.where(observed, X, mu)
+        Sigma = np.cov(Xf, rowvar=False) + self.ridge * np.eye(N)
+        self.loss_history_ = []  # relative change in the covariance per iteration (-> 0 at convergence)
 
-        for _ in range(self.max_iter):
-            s_tau = 0.0                 # sum of weights
-            s1 = np.zeros(N)            # sum w_i * xhat_i
-            S2 = np.zeros((N, N))       # sum w_i * xhat_i xhat_i' + cond. cov
-            for t in range(T):
-                o = obs[t]
-                p_o = int(o.sum())
-                xhat = mu.copy()
-                C = np.zeros((N, N))
-                if p_o == 0:                      # nothing observed
-                    w = 1.0
-                    C = Sigma
-                else:
-                    m = ~o
-                    So = Sigma[np.ix_(o, o)]
-                    d = X[t, o] - mu[o]
-                    Soi_d = np.linalg.solve(So, d)
-                    delta = float(d @ Soi_d)
-                    w = (nu + p_o) / (nu + delta)
-                    xhat[o] = X[t, o]
-                    if m.any():                   # regress missing on observed
-                        Som = Sigma[np.ix_(o, m)]
-                        xhat[m] = mu[m] + Som.T @ Soi_d
-                        C[np.ix_(m, m)] = Sigma[np.ix_(m, m)] - Som.T @ np.linalg.solve(So, Som)
-                s_tau += w
-                s1 += w * xhat
-                S2 += w * np.outer(xhat, xhat) + C
+        missing = ~observed
+        patterns, inverse = np.unique(missing, axis=0, return_inverse=True)
+        eye = np.eye(N)
 
-            mu_new = s1 / s_tau
-            Sigma_new = (S2 - s_tau * np.outer(mu_new, mu_new)) / T
-            Sigma_new = 0.5 * (Sigma_new + Sigma_new.T) + eye
+        for it in range(self.max_iter):
+            Sigma_old = Sigma.copy()
+            correction = np.zeros((N, N))
 
-            change = max(np.max(np.abs(mu_new - mu)),
-                         np.max(np.abs(Sigma_new - Sigma)))
-            mu, Sigma = mu_new, Sigma_new
-            if change < self.tol:
+            for p, pattern in enumerate(patterns):
+                rows = np.where(inverse == p)[0]
+                mi = np.where(pattern)[0]                 # missing columns
+                if mi.size == 0:                          # fully observed
+                    continue
+                oi = np.where(~pattern)[0]                # observed columns
+                if oi.size == 0:                          # fully missing row(s)
+                    Xf[np.ix_(rows, mi)] = mu[mi]
+                    correction[np.ix_(mi, mi)] += Sigma[np.ix_(mi, mi)] * rows.size
+                    continue
+
+                Soo = Sigma[np.ix_(oi, oi)] + self.ridge * np.eye(oi.size)
+                Som = Sigma[np.ix_(oi, mi)]
+                B = np.linalg.solve(Soo, Som)             # (|o|, |m|)
+                resid = X[np.ix_(rows, oi)] - mu[oi]
+                Xf[np.ix_(rows, mi)] = mu[mi] + resid @ B
+                cond_cov = Sigma[np.ix_(mi, mi)] - Som.T @ B
+                correction[np.ix_(mi, mi)] += cond_cov * rows.size
+
+            mu = Xf.mean(axis=0)
+            centered = Xf - mu
+            Sigma = (centered.T @ centered + correction) / T + self.ridge * eye
+
+            delta = np.linalg.norm(Sigma - Sigma_old) / (np.linalg.norm(Sigma_old) + 1e-12)
+            self.loss_history_.append(delta)
+            if self.verbose:
+                print(f"EM    iter {it + 1:3d}/{self.max_iter}  cov update {delta:.2e}")
+            if delta < self.tol:
                 break
 
-        self.mu_ = mu
-        self.Sigma_ = Sigma
+        self.mu_, self.Sigma_ = mu, Sigma
         return self
 
     def transform(self, X):
         X = _to_numpy(X)
-        obs = ~np.isnan(X)
-        out = X.copy()
-        for t in range(X.shape[0]):
-            o = obs[t]
-            m = ~o
-            if not m.any():
-                continue
-            if not o.any():
-                out[t, m] = self.mu_[m]
-                continue
-            So = self.Sigma_[np.ix_(o, o)]
-            Som = self.Sigma_[np.ix_(o, m)]
-            d = X[t, o] - self.mu_[o]
-            out[t, m] = self.mu_[m] + Som.T @ np.linalg.solve(So, d)
-        return _preserve_observed(X, out)
+        N = X.shape[1]
+        observed = ~np.isnan(X)
+        Xf = np.where(observed, X, 0.0)
+        missing = ~observed
+        patterns, inverse = np.unique(missing, axis=0, return_inverse=True)
 
-    def fit_transform(self, X, y=None):
-        return self.fit(X).transform(X)
+        for p, pattern in enumerate(patterns):
+            rows = np.where(inverse == p)[0]
+            mi = np.where(pattern)[0]
+            if mi.size == 0:
+                continue
+            oi = np.where(~pattern)[0]
+            if oi.size == 0:
+                Xf[np.ix_(rows, mi)] = self.mu_[mi]
+                continue
+            Soo = self.Sigma_[np.ix_(oi, oi)] + self.ridge * np.eye(oi.size)
+            Som = self.Sigma_[np.ix_(oi, mi)]
+            B = np.linalg.solve(Soo, Som)
+            resid = X[np.ix_(rows, oi)] - self.mu_[oi]
+            Xf[np.ix_(rows, mi)] = self.mu_[mi] + resid @ B
+        return Xf
 
 
 # --------------------------------------------------------------------------- #
-# 3. KNN baseline
+# 4. k-nearest neighbours
 # --------------------------------------------------------------------------- #
-class KNNReturnImputer:
-    """Nonparametric KNN imputer (thin wrapper around ``sklearn`` KNNImputer).
+class KNNImputer(_BaseImputer):
+    """Fill each missing cell from its ``k`` nearest rows.
 
-    Missing returns at a given time point are filled from the most similar time
-    points in the observed feature space, using a distance-weighted average of
-    the ``n_neighbors`` nearest rows.
-
-    Parameters
-    ----------
-    n_neighbors : int
-        Number of neighbouring rows used for each imputation.
-    weights : {"uniform", "distance"}
-        Neighbour weighting scheme passed to ``sklearn.impute.KNNImputer``.
+    Distances are the NaN-aware Euclidean distance over the features two rows
+    both observe (scaled by the number of co-observed features).  For a given
+    missing column the value is the (optionally distance-weighted) average of
+    the nearest neighbours that actually observe that column.
     """
 
     def __init__(self, n_neighbors=5, weights="distance"):
@@ -251,270 +260,407 @@ class KNNReturnImputer:
         self.weights = weights
 
     def fit(self, X, y=None):
-        X = _to_numpy(X)
-        self.imputer_ = KNNImputer(n_neighbors=self.n_neighbors, weights=self.weights)
-        self.imputer_.fit(X)
+        self.train_ = _to_numpy(X)
+        self.col_mean_ = np.nan_to_num(np.nanmean(self.train_, axis=0))
         return self
 
     def transform(self, X):
         X = _to_numpy(X)
-        out = self.imputer_.transform(X)
-        return _preserve_observed(X, out)
+        A = self.train_
+        A_obs = ~np.isnan(A)
+        N = X.shape[1]
+        out = X.copy()
 
-    def fit_transform(self, X, y=None):
-        return self.fit(X).transform(X)
+        for i in range(X.shape[0]):
+            row = X[i]
+            miss = np.isnan(row)
+            if not miss.any():
+                continue
+            obs = ~miss
+
+            both = A_obs & obs                              # (T_train, N)
+            count = both.sum(axis=1)
+            diff = np.where(both, A - row, 0.0)
+            d2 = (diff ** 2).sum(axis=1) * (obs.sum() / np.maximum(count, 1))
+            d2[count == 0] = np.inf
+            order = np.argsort(d2)
+
+            for j in np.where(miss)[0]:
+                col = A[order, j]
+                valid = order[~np.isnan(col)][: self.n_neighbors]
+                if valid.size == 0:
+                    out[i, j] = self.col_mean_[j]
+                elif self.weights == "distance":
+                    w = 1.0 / (np.sqrt(d2[valid]) + 1e-8)
+                    out[i, j] = np.sum(w * A[valid, j]) / np.sum(w)
+                else:
+                    out[i, j] = A[valid, j].mean()
+        return out
 
 
 # --------------------------------------------------------------------------- #
-# PyPOTS plumbing shared by the deep-learning wrappers
+# 5. BRITS  (Bidirectional Recurrent Imputation for Time Series)
 # --------------------------------------------------------------------------- #
-def _seed_everything(random_state):
-    """Seed NumPy and (if present) PyTorch for reproducible deep training."""
-    if random_state is None:
-        return
-    np.random.seed(random_state)
-    try:
-        import torch
-        torch.manual_seed(random_state)
-    except ImportError:
-        pass
+def _time_gaps(mask):
+    """BRITS delta: time since each feature was last observed, per window.
 
-
-def _import_pypots(model_name):
-    """Return ``pypots.imputation.<model_name>`` or raise a clear ImportError."""
-    try:
-        import pypots.imputation as imputation
-    except ImportError as exc:  # PyPOTS not installed at all
-        raise ImportError(
-            f"{model_name} requires the optional package 'pypots'. "
-            "Install it with `pip install pypots`."
-        ) from exc
-    model_cls = getattr(imputation, model_name, None)
-    if model_cls is None:      # installed, but this model is unavailable
-        raise ImportError(
-            f"'{model_name}' is not available in the installed version of pypots. "
-            "Upgrade pypots or install an implementation that provides it."
-        )
-    return model_cls
-
-
-def _instantiate(model_cls, kwargs, learning_rate):
-    """Build a PyPOTS model, tolerating minor cross-version API differences.
-
-    Handles the ``learning_rate`` vs ``optimizer`` and ``d_inner`` vs ``d_ffn``
-    naming changes that differ between PyPOTS releases.
+    ``mask`` is ``(B, L, N)`` with 1 = observed.  ``delta[:, 0] = 0`` and
+    ``delta[:, t] = 1 + (1 - mask[:, t-1]) * delta[:, t-1]``.
     """
-    lr_styles = [{"learning_rate": learning_rate}]
-    try:
-        from pypots.optim import Adam
-        lr_styles.append({"optimizer": Adam(lr=learning_rate)})
-    except Exception:
-        pass
-    lr_styles.append({})
-
-    last_err = None
-    for lr_kw in lr_styles:
-        for rename in (False, True):
-            kw = dict(kwargs)
-            kw.update(lr_kw)
-            if rename and "d_inner" in kw:
-                kw["d_ffn"] = kw.pop("d_inner")
-            try:
-                return model_cls(**kw)
-            except TypeError as exc:
-                last_err = exc
-    raise last_err
+    B, L, N = mask.shape
+    delta = np.zeros((B, L, N), dtype=np.float32)
+    for t in range(1, L):
+        delta[:, t] = 1.0 + (1.0 - mask[:, t - 1]) * delta[:, t - 1]
+    return delta
 
 
-def _run_imputation(model, dataset, predict_kwargs=None):
-    """Return the backend imputation array across PyPOTS API variants."""
-    predict_kwargs = predict_kwargs or {}
-    if hasattr(model, "predict"):
-        try:
-            result = model.predict(dataset, **predict_kwargs)
-        except TypeError:
-            result = model.predict(dataset)
-        if isinstance(result, dict):
-            return result.get("imputation", result)
-        return result
-    return model.impute(dataset)  # older PyPOTS
+def _masked_mae(pred, target, mask):
+    return (torch.abs(pred - target) * mask).sum() / (mask.sum() + 1e-5)
 
 
-class _BaseDeepImputer:
-    """Common fit/transform logic for the PyPOTS-backed wrappers."""
+class _RITS(nn.Module):
+    """One temporal direction of BRITS."""
 
-    _PYPOTS_NAME = None  # set by subclasses
+    def __init__(self, n_features, hidden):
+        super().__init__()
+        self.hidden = hidden
+        self.rnn = nn.LSTMCell(2 * n_features, hidden)
+        self.decay_h = nn.Linear(n_features, hidden)      # hidden-state decay
+        self.decay_x = nn.Linear(n_features, n_features)  # input decay
+        self.hist = nn.Linear(hidden, n_features)         # history regression
+        self.feat = nn.Linear(n_features, n_features)     # feature regression
+        self.beta = nn.Linear(2 * n_features, n_features)  # combination gate
 
-    def _model_kwargs(self):
-        """Subclass hook: constructor kwargs excluding the learning rate."""
-        raise NotImplementedError
+    def forward(self, x, m, delta):
+        B, L, N = x.shape
+        h = x.new_zeros(B, self.hidden)
+        c = x.new_zeros(B, self.hidden)
+        loss = 0.0
+        imputations = []
 
-    def _predict_kwargs(self):
-        """Subclass hook: extra kwargs for the prediction call."""
-        return {}
+        feat_w = self.feat.weight - torch.diag(torch.diag(self.feat.weight))
+
+        for t in range(L):
+            xt, mt, dt = x[:, t], m[:, t], delta[:, t]
+            gamma_h = torch.exp(-torch.relu(self.decay_h(dt)))
+            gamma_x = torch.exp(-torch.relu(self.decay_x(dt)))
+            h = h * gamma_h
+
+            x_hat = self.hist(h)
+            loss = loss + _masked_mae(x_hat, xt, mt)
+
+            x_comp = mt * xt + (1 - mt) * x_hat
+            z_hat = torch.nn.functional.linear(x_comp, feat_w, self.feat.bias)
+            loss = loss + _masked_mae(z_hat, xt, mt)
+
+            beta = torch.sigmoid(self.beta(torch.cat([gamma_x, mt], dim=1)))
+            c_hat = beta * z_hat + (1 - beta) * x_hat
+            loss = loss + _masked_mae(c_hat, xt, mt)
+
+            c_comp = mt * xt + (1 - mt) * c_hat
+            h, c = self.rnn(torch.cat([c_comp, mt], dim=1), (h, c))
+            imputations.append(c_comp)
+
+        return torch.stack(imputations, dim=1), loss
+
+
+class _BRITSNet(nn.Module):
+    def __init__(self, n_features, hidden):
+        super().__init__()
+        self.forward_rits = _RITS(n_features, hidden)
+        self.backward_rits = _RITS(n_features, hidden)
+
+    def forward(self, x, m, delta_f, delta_b):
+        imp_f, loss_f = self.forward_rits(x, m, delta_f)
+        rev = lambda z: torch.flip(z, dims=[1])
+        imp_b, loss_b = self.backward_rits(rev(x), rev(m), delta_b)
+        imp_b = rev(imp_b)
+        consistency = torch.abs(imp_f - imp_b).mean()
+        imputation = (imp_f + imp_b) / 2
+        return imputation, loss_f + loss_b + 0.1 * consistency
+
+
+class BRITSImputer(_BaseImputer):
+    """BRITS: a bidirectional RNN with temporal decay and feature regression.
+
+    The long panel is cut into windows of ``window`` steps; the network is
+    trained to reconstruct the observed entries of every window, then used to
+    fill the missing ones.
+    """
+
+    def __init__(self, hidden=64, window=100, epochs=300, lr=1e-3,
+                 batch_size=16, random_state=0, device="cpu", verbose=False):
+        self.hidden = hidden
+        self.window = window
+        self.epochs = epochs
+        self.lr = lr
+        self.batch_size = batch_size
+        self.random_state = random_state
+        self.device = device
+        self.verbose = verbose
 
     def fit(self, X, y=None):
+        torch.manual_seed(self.random_state)
         X = _to_numpy(X)
-        T, N = X.shape
-        if self.n_steps is None:
-            self.n_steps = T
-        if self.n_features is None:
-            self.n_features = N
-        _seed_everything(self.random_state)
-        model_cls = _import_pypots(self._PYPOTS_NAME)
-        self.model_ = _instantiate(model_cls, self._model_kwargs(), self.learning_rate)
-        self.model_.fit({"X": _to_3d(X)})
+        observed = (~np.isnan(X)).astype(np.float32)
+        Xs, self.mu_, self.sd_ = _standardize(X, observed.astype(bool))
+
+        xw, _ = _to_windows(Xs.astype(np.float32), self.window)
+        mw, _ = _to_windows(observed, self.window)
+        dw_f = _time_gaps(mw)
+        dw_b = _time_gaps(mw[:, ::-1].copy())
+
+        dev = torch.device(self.device)
+        x = torch.tensor(xw, device=dev)
+        m = torch.tensor(mw, device=dev)
+        df = torch.tensor(dw_f, device=dev)
+        db = torch.tensor(dw_b, device=dev)
+
+        self.net_ = _BRITSNet(X.shape[1], self.hidden).to(dev)
+        opt = torch.optim.Adam(self.net_.parameters(), lr=self.lr)
+
+        n = x.shape[0]
+        self.loss_history_ = []
+        self.net_.train()
+        for epoch in range(self.epochs):
+            perm = torch.randperm(n, device=dev)
+            total = 0.0
+            for s in range(0, n, self.batch_size):
+                idx = perm[s: s + self.batch_size]
+                opt.zero_grad()
+                _, loss = self.net_(x[idx], m[idx], df[idx], db[idx])
+                loss.backward()
+                opt.step()
+                total += loss.item()
+            self._log(epoch, total / max(1, math.ceil(n / self.batch_size)))
         return self
 
     def transform(self, X):
         X = _to_numpy(X)
-        out = _run_imputation(self.model_, {"X": _to_3d(X)}, self._predict_kwargs())
-        out = np.asarray(out)
-        if out.ndim == 4:                       # (n_samples, n_sampling_times, T, N)
-            out = out.mean(axis=1)
-        return _preserve_observed(X, _from_3d(out))
+        observed = (~np.isnan(X)).astype(np.float32)
+        Xs = np.where(observed.astype(bool), (X - self.mu_) / self.sd_, 0.0)
 
-    def fit_transform(self, X, y=None):
-        return self.fit(X).transform(X)
+        xw, _ = _to_windows(Xs.astype(np.float32), self.window)
+        mw, _ = _to_windows(observed, self.window)
+        dw_f = _time_gaps(mw)
+        dw_b = _time_gaps(mw[:, ::-1].copy())
+
+        dev = torch.device(self.device)
+        self.net_.eval()
+        with torch.no_grad():
+            imp, _ = self.net_(
+                torch.tensor(xw, device=dev),
+                torch.tensor(mw, device=dev),
+                torch.tensor(dw_f, device=dev),
+                torch.tensor(dw_b, device=dev),
+            )
+        imp = imp.cpu().numpy()
+        filled = _from_windows(imp, X.shape[0]) * self.sd_ + self.mu_
+        return np.where(observed.astype(bool), X, filled)
 
 
 # --------------------------------------------------------------------------- #
-# 4. BRITS
+# 6. CSDI  (Conditional Score-based Diffusion Imputation)
 # --------------------------------------------------------------------------- #
-class BRITSImputer(_BaseDeepImputer):
-    """Bidirectional recurrent imputation (BRITS) -- thin PyPOTS wrapper.
+class _ResBlock(nn.Module):
+    """A CSDI residual block: temporal attention, then feature attention."""
 
-    BRITS learns missing values jointly with the temporal dynamics of the series
-    using a bidirectional RNN.  The 2D panel ``(T, N)`` is treated as a single
-    long sample of shape ``(1, T, N)`` before being passed to the backend.
+    def __init__(self, channels, n_heads):
+        super().__init__()
+        kw = dict(d_model=channels, nhead=n_heads, dim_feedforward=2 * channels,
+                  batch_first=True, activation="gelu")
+        self.time_attn = nn.TransformerEncoderLayer(**kw)
+        self.feat_attn = nn.TransformerEncoderLayer(**kw)
+        self.gate = nn.Linear(channels, 2 * channels)
+        self.out = nn.Linear(channels, 2 * channels)
 
-    Parameters mirror ``pypots.imputation.BRITS``; ``n_steps`` and ``n_features``
-    are inferred from the data during ``fit`` when left as ``None``.
-    """
+    def forward(self, h, diff_bias):
+        B, L, N, C = h.shape
+        y = h + diff_bias
 
-    _PYPOTS_NAME = "BRITS"
+        yt = y.permute(0, 2, 1, 3).reshape(B * N, L, C)
+        yt = self.time_attn(yt).reshape(B, N, L, C).permute(0, 2, 1, 3)
 
-    def __init__(self, n_steps=None, n_features=None, rnn_hidden_size=64,
-                 epochs=100, batch_size=1, learning_rate=1e-3, random_state=42):
-        self.n_steps = n_steps
-        self.n_features = n_features
-        self.rnn_hidden_size = rnn_hidden_size
-        self.epochs = epochs
-        self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.random_state = random_state
+        yf = yt.reshape(B * L, N, C)
+        yf = self.feat_attn(yf).reshape(B, L, N, C)
 
-    def _model_kwargs(self):
-        return dict(
-            n_steps=self.n_steps,
-            n_features=self.n_features,
-            rnn_hidden_size=self.rnn_hidden_size,
-            batch_size=self.batch_size,
-            epochs=self.epochs,
+        a, b = self.gate(yf).chunk(2, dim=-1)
+        gated = torch.tanh(a) * torch.sigmoid(b)
+        res, skip = self.out(gated).chunk(2, dim=-1)
+        return (h + res) / math.sqrt(2.0), skip
+
+
+class _CSDINet(nn.Module):
+    """Noise-prediction network conditioned on the observed entries."""
+
+    def __init__(self, n_features, window, channels=32, n_layers=2,
+                 n_heads=4, d_time=16, d_feat=16):
+        super().__init__()
+        self.in_proj = nn.Linear(2, channels)             # [conditioning, noisy]
+        self.feat_emb = nn.Embedding(n_features, d_feat)
+        self.side_proj = nn.Linear(d_time + d_feat, channels)
+        self.diff_mlp = nn.Sequential(
+            nn.Linear(channels, channels), nn.SiLU(), nn.Linear(channels, channels)
         )
+        self.blocks = nn.ModuleList(_ResBlock(channels, n_heads) for _ in range(n_layers))
+        self.out_proj = nn.Linear(channels, 1)
+        self.channels = channels
+
+        pos = torch.arange(window)[:, None]
+        div = torch.exp(torch.arange(0, d_time, 2) * (-math.log(10000.0) / d_time))
+        pe = torch.zeros(window, d_time)
+        pe[:, 0::2] = torch.sin(pos * div)
+        pe[:, 1::2] = torch.cos(pos * div)
+        self.register_buffer("time_pe", pe)
+
+    def _diff_embedding(self, t):
+        half = self.channels // 2
+        freqs = torch.exp(
+            torch.arange(half, device=t.device) * (-math.log(10000.0) / half)
+        )
+        args = t.float()[:, None] * freqs[None]
+        return torch.cat([torch.sin(args), torch.cos(args)], dim=-1)
+
+    def forward(self, cond, noisy, t):
+        B, L, N = noisy.shape
+        h = self.in_proj(torch.stack([cond, noisy], dim=-1))   # (B, L, N, C)
+
+        time = self.time_pe[:L, None, :].expand(L, N, -1)
+        feat = self.feat_emb.weight[None, :, :].expand(L, N, -1)
+        side = self.side_proj(torch.cat([time, feat], dim=-1))
+        h = h + side[None]
+
+        diff_bias = self.diff_mlp(self._diff_embedding(t))[:, None, None, :]
+
+        skips = 0.0
+        for block in self.blocks:
+            h, skip = block(h, diff_bias)
+            skips = skips + skip
+        out = skips / math.sqrt(len(self.blocks))
+        return self.out_proj(out).squeeze(-1)              # (B, L, N)
 
 
-# --------------------------------------------------------------------------- #
-# 5. SAITS
-# --------------------------------------------------------------------------- #
-class SAITSImputer(_BaseDeepImputer):
-    """Self-Attention Imputation for Time Series (SAITS) -- thin PyPOTS wrapper.
+class CSDIImputer(_BaseImputer):
+    """CSDI: conditional denoising-diffusion imputation.
 
-    SAITS uses stacked self-attention blocks, letting it capture long-range
-    temporal dependence as well as cross-sectional dependence across assets.
-    The 2D panel ``(T, N)`` is reshaped to ``(1, T, N)`` for the backend.
-
-    Parameters mirror ``pypots.imputation.SAITS``; ``n_steps`` and ``n_features``
-    are inferred from the data during ``fit`` when left as ``None``.
+    A DDPM is trained self-supervised -- part of the observed entries are hidden
+    and the network learns to denoise them given the rest.  At inference the
+    reverse process is run with the observed cells held fixed, so sampling is
+    conditioned on what we actually know.  Each reverse pass is one stochastic
+    draw; following the paper, the imputation is the median over ``n_samples``
+    such draws (more samples -> less noise, proportionally more time).
     """
 
-    _PYPOTS_NAME = "SAITS"
-
-    def __init__(self, n_steps=None, n_features=None, n_layers=2, d_model=64,
-                 d_inner=128, n_heads=4, d_k=16, d_v=16, dropout=0.1,
-                 epochs=100, batch_size=1, learning_rate=1e-3, random_state=42):
-        self.n_steps = n_steps
-        self.n_features = n_features
+    def __init__(self, window=32, stride=None, channels=32, n_layers=2, n_heads=4,
+                 n_steps=50, epochs=100, lr=1e-3, batch_size=16,
+                 n_samples=1, random_state=0, device="cpu",
+                 verbose=False):
+        self.window = window
+        # overlapping training windows -> many more, more densely sampled training
+        # samples (so more gradient steps per epoch and a smoother loss curve).
+        self.stride = stride if stride is not None else max(1, window // 2)
+        self.channels = channels
         self.n_layers = n_layers
-        self.d_model = d_model
-        self.d_inner = d_inner
         self.n_heads = n_heads
-        self.d_k = d_k
-        self.d_v = d_v
-        self.dropout = dropout
-        self.epochs = epochs
-        self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.random_state = random_state
-
-    def _model_kwargs(self):
-        return dict(
-            n_steps=self.n_steps,
-            n_features=self.n_features,
-            n_layers=self.n_layers,
-            d_model=self.d_model,
-            d_inner=self.d_inner,
-            n_heads=self.n_heads,
-            d_k=self.d_k,
-            d_v=self.d_v,
-            dropout=self.dropout,
-            batch_size=self.batch_size,
-            epochs=self.epochs,
-        )
-
-
-# --------------------------------------------------------------------------- #
-# 6. CSDI
-# --------------------------------------------------------------------------- #
-class CSDIImputer(_BaseDeepImputer):
-    """Conditional Score-based Diffusion Imputation (CSDI) -- thin PyPOTS wrapper.
-
-    CSDI is probabilistic: instead of a single point estimate it models the
-    conditional distribution of missing values given the observed ones, which is
-    valuable in finance where uncertainty about missing returns feeds into
-    covariance estimation, risk models and portfolio decisions.  When several
-    samples are drawn (``n_sampling_times > 1``) their mean is returned.
-
-    Parameters mirror ``pypots.imputation.CSDI``; ``n_steps`` and ``n_features``
-    are inferred from the data during ``fit`` when left as ``None``.
-    """
-
-    _PYPOTS_NAME = "CSDI"
-
-    def __init__(self, n_steps=None, n_features=None, n_layers=2, n_channels=64,
-                 n_heads=4, d_time_embedding=128, d_feature_embedding=16,
-                 d_diffusion_embedding=128, n_diffusion_steps=50,
-                 epochs=100, batch_size=1, learning_rate=1e-3,
-                 n_sampling_times=1, random_state=42):
         self.n_steps = n_steps
-        self.n_features = n_features
-        self.n_layers = n_layers
-        self.n_channels = n_channels
-        self.n_heads = n_heads
-        self.d_time_embedding = d_time_embedding
-        self.d_feature_embedding = d_feature_embedding
-        self.d_diffusion_embedding = d_diffusion_embedding
-        self.n_diffusion_steps = n_diffusion_steps
         self.epochs = epochs
+        self.lr = lr
         self.batch_size = batch_size
-        self.learning_rate = learning_rate
-        self.n_sampling_times = n_sampling_times
+        self.n_samples = n_samples
         self.random_state = random_state
+        self.device = device
+        self.verbose = verbose
 
-    def _model_kwargs(self):
-        return dict(
-            n_steps=self.n_steps,
-            n_features=self.n_features,
-            n_layers=self.n_layers,
-            n_channels=self.n_channels,
-            n_heads=self.n_heads,
-            d_time_embedding=self.d_time_embedding,
-            d_feature_embedding=self.d_feature_embedding,
-            d_diffusion_embedding=self.d_diffusion_embedding,
-            n_diffusion_steps=self.n_diffusion_steps,
-            batch_size=self.batch_size,
-            epochs=self.epochs,
-        )
+    def _schedule(self, dev):
+        # quadratic beta schedule from ~1e-4 to 0.5 (as in CSDI)
+        beta = torch.linspace(1e-4 ** 0.5, 0.5 ** 0.5, self.n_steps, device=dev) ** 2
+        alpha = 1.0 - beta
+        return beta, alpha, torch.cumprod(alpha, dim=0)
 
-    def _predict_kwargs(self):
-        return dict(n_sampling_times=self.n_sampling_times)
+    def fit(self, X, y=None):
+        torch.manual_seed(self.random_state)
+        X = _to_numpy(X)
+        observed = ~np.isnan(X)
+        Xs, self.mu_, self.sd_ = _standardize(X, observed)
+
+        # overlapping windows for training (many more samples than a clean tiling)
+        xw, _ = _to_windows(Xs.astype(np.float32), self.window, self.stride)
+        mw, _ = _to_windows(observed.astype(np.float32), self.window, self.stride)
+
+        dev = torch.device(self.device)
+        x0 = torch.tensor(xw, device=dev)
+        om = torch.tensor(mw, device=dev)
+        beta, alpha, abar = self._schedule(dev)
+
+        self.net_ = _CSDINet(X.shape[1], self.window, self.channels,
+                             self.n_layers, self.n_heads).to(dev)
+        opt = torch.optim.Adam(self.net_.parameters(), lr=self.lr)
+
+        n = x0.shape[0]
+        self.loss_history_ = []
+        self.net_.train()
+        for epoch in range(self.epochs):
+            perm = torch.randperm(n, device=dev)
+            total, nb = 0.0, 0
+            for s in range(0, n, self.batch_size):
+                idx = perm[s: s + self.batch_size]
+                xb, mb = x0[idx], om[idx]
+                # random conditioning ratio per window, so training spans the full
+                # range of observed fractions (incl. the high ones seen at inference)
+                # instead of a fixed 50% -- this is what keeps the sampler calibrated.
+                ratio = torch.rand(xb.shape[0], 1, 1, device=dev)
+                cond_mask = mb * (torch.rand_like(mb) < ratio)
+                target = mb * (1 - cond_mask)
+                if target.sum() == 0:
+                    continue
+
+                t = torch.randint(0, self.n_steps, (xb.shape[0],), device=dev)
+                a = abar[t][:, None, None]
+                eps = torch.randn_like(xb)
+                noisy = torch.sqrt(a) * xb + torch.sqrt(1 - a) * eps
+                # conditioning cells are given to the model clean (as at inference);
+                # only the non-conditioning cells are actually noised.
+                noisy = cond_mask * xb + (1 - cond_mask) * noisy
+
+                eps_hat = self.net_(cond_mask * xb, noisy, t)
+                loss = (((eps_hat - eps) * target) ** 2).sum() / (target.sum() + 1e-5)
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+                total += loss.item()
+                nb += 1
+            self._log(epoch, total / max(1, nb))
+        return self
+
+    @torch.no_grad()
+    def transform(self, X):
+        X = _to_numpy(X)
+        observed = ~np.isnan(X)
+        Xs = np.where(observed, (X - self.mu_) / self.sd_, 0.0)
+
+        xw, _ = _to_windows(Xs.astype(np.float32), self.window)
+        mw, _ = _to_windows(observed.astype(np.float32), self.window)
+
+        dev = torch.device(self.device)
+        n_win = xw.shape[0]
+        # tile the windows so all n_samples draws run through the net together
+        x0 = torch.tensor(xw, device=dev).repeat(self.n_samples, 1, 1)
+        om = torch.tensor(mw, device=dev).repeat(self.n_samples, 1, 1)
+        beta, alpha, abar = self._schedule(dev)
+
+        self.net_.eval()
+        x = om * x0 + (1 - om) * torch.randn_like(x0)       # observed clean, missing ~ noise
+        for t in reversed(range(self.n_steps)):
+            tt = torch.full((x.shape[0],), t, device=dev, dtype=torch.long)
+            eps_hat = self.net_(om * x0, x, tt)
+            mean = (x - beta[t] / torch.sqrt(1 - abar[t]) * eps_hat) / torch.sqrt(alpha[t])
+            if t > 0:
+                x = mean + torch.sqrt(beta[t]) * torch.randn_like(x)
+            else:
+                x = mean
+            x = om * x0 + (1 - om) * x                       # keep observed clean, evolve only missing
+
+        samples = x.reshape(self.n_samples, n_win, self.window, -1)
+        x = samples.median(dim=0).values                    # median over the draws
+        imp = _from_windows(x.cpu().numpy(), X.shape[0]) * self.sd_ + self.mu_
+        return np.where(observed, X, imp)
