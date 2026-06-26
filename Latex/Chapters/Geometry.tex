@@ -1,0 +1,597 @@
+\section{Geometrical Interpretation}
+\label{geometry}
+
+In this section we want to develop some geometrical intuition behind the
+evaluation methods criteria and the imputation models.
+
+First consider a full multivariate time series of daily log returns:
+\[
+R =
+\begin{pmatrix}
+r_1^\top \\
+r_2^\top \\
+\vdots \\
+r_T^\top
+\end{pmatrix}
+=
+\begin{pmatrix}
+r_{11} & r_{12} & \cdots & r_{1N}\\
+r_{21} & r_{22} & \cdots & r_{2N}\\
+\vdots & \vdots & \ddots & \vdots\\
+r_{T1} & r_{T2} & \cdots & r_{TN}
+\end{pmatrix}
+\in\mathbb{R}^{T\times N}
+\]
+
+The (t)-th observation is:
+
+\[
+r_t =
+(r_{t1},\ldots,r_{tN})^\top
+\in\mathbb{R}^N
+\]
+
+The (i)-th variable asset realization is:
+
+\[
+R_i =
+(r_{1i},\ldots,x_{Ti})^\top
+\in\mathbb{R}^T
+\]
+
+Let us first consider each asset separately.
+We assume each return series is a realization of a square integrable random value in a Hilbert space:
+
+\[
+R_i \in
+L^2(\Omega,\mathcal{F},\mathbb{P})
+=
+\left\{
+X:\Omega\rightarrow\mathbb{R}
+:
+\mathbb{E}[X^2]<\infty
+\right\}
+\]
+
+Square integrability, which is a reasonable assumption \footnote{Empirical work as \cite{plerou1999} shows
+that the power law exponent of individual stocks is around 3, meaning variance exists but skew and kurtosis may not.},
+enables us to define an useful inner product
+on $L^2$, namely:
+\[
+\langle X,Y\rangle
+=
+\mathbb{E}[XY]
+\]
+
+\clearpage
+A multivariate time series is represented as
+
+
+Hilbert space
+
+The Hilbert space of square-integrable random variables is
+
+
+
+Inner product
+
+
+
+Norm
+
+\[
+\|X\|
+=
+\sqrt{\langle X,X\rangle}
+=
+\sqrt{\mathbb{E}[X^2]}.
+\]
+
+Distance
+
+\[
+d(X,Y)
+=
+\|X-Y\|.
+\]
+Centered random variables
+
+If
+
+\[
+\mathbb{E}[X]=0,
+\qquad
+\mathbb{E}[Y]=0,
+\]
+
+then
+
+\[
+\langle X,Y\rangle
+=
+\operatorname{Cov}(X,Y).
+\]
+
+Correlation
+
+\[
+\rho(X,Y)
+=
+\frac{\langle X,Y\rangle}
+{\|X\|\|Y\|}.
+\]
+
+Angle between random variables
+
+\[
+\theta
+=
+\arccos\left(
+\frac{\langle X,Y\rangle}
+{\|X\|\|Y\|}
+\right).
+\]
+Conditional expectation
+
+Conditional expectation
+
+\[
+\mathbb{E}[X\mid\mathcal{G}].
+\]
+
+Projection interpretation
+
+\[
+\mathbb{E}[X\mid\mathcal{G}]
+=
+P_{L^2(\mathcal{G})}(X),
+\]
+
+where $(P_{L^2(\mathcal{G})})$ denotes the orthogonal projection onto the closed subspace $(L^2(\mathcal{G}))$.
+
+Orthogonality condition
+
+\[
+X-
+\mathbb{E}[X\mid\mathcal{G}]
+\perp
+L^2(\mathcal{G}).
+\]
+
+Equivalently,
+
+\[
+\mathbb{E}
+\left[
+\left(
+X-
+\mathbb{E}[X\mid\mathcal{G}]
+\right)
+Y
+\right]
+=
+0,
+\qquad
+\forall
+Y\in L^2(\mathcal{G}).
+\]
+Covariance matrix
+
+Mean vector
+
+\[
+\mu
+=
+\mathbb{E}[X].
+\]
+
+Covariance matrix
+
+\[
+\Sigma
+=
+\mathbb{E}
+\left[
+(X-\mu)(X-\mu)^\top
+\right].
+\]
+
+Sample covariance
+
+\[
+S
+=
+\frac1{T-1}
+\sum_{t=1}^T
+(x_t-\bar x)
+(x_t-\bar x)^\top.
+\]
+
+Correlation matrix
+
+\[
+R
+=
+D^{-1/2}
+\Sigma
+D^{-1/2},
+\]
+
+where
+
+\[
+D
+=
+\operatorname{diag}
+(\Sigma).
+\]
+Gram matrix
+
+The Gram matrix of variables
+
+\[
+G
+=
+X^\top X.
+\]
+
+The Gram matrix of observations
+
+\[
+K
+=
+XX^\top.
+\]
+PCA
+
+Eigenvalue decomposition
+
+\[
+\Sigma
+=
+Q
+\Lambda
+Q^\top.
+\]
+
+Projection onto first (k) principal directions
+
+\[
+\widehat X
+=
+XQ_kQ_k^\top.
+\]
+
+Low-rank approximation
+
+\[
+X
+\approx
+UV^\top.
+\]
+Mahalanobis geometry
+
+Mahalanobis distance
+
+\[
+d_M(x,\mu)
+=
+\sqrt{
+(x-\mu)^\top
+\Sigma^{-1}
+(x-\mu)
+}.
+\]
+
+Squared Mahalanobis distance
+
+\[
+\delta
+=
+(x-\mu)^\top
+\Sigma^{-1}
+(x-\mu).
+\]
+
+Ellipsoid
+
+\[
+\mathcal{E}
+=
+\{
+x:
+(x-\mu)^\top
+\Sigma^{-1}
+(x-\mu)
+\le c
+\}.
+\]
+Partitioned covariance matrix
+\[
+\Sigma
+=
+\begin{pmatrix}
+\Sigma_{oo}
+&
+\Sigma_{om}
+\\
+\Sigma_{mo}
+&
+\Sigma_{mm}
+\end{pmatrix}.
+\]
+
+Conditional mean
+
+\[
+\mu_{m|o}
+=
+\mu_m
++
+\Sigma_{mo}
+\Sigma_{oo}^{-1}
+(x_o-\mu_o).
+\]
+
+Conditional covariance
+
+\[
+\Sigma_{m|o}
+=
+\Sigma_{mm}
+-
+\Sigma_{mo}
+\Sigma_{oo}^{-1}
+\Sigma_{om}.
+\]
+Projection matrices
+
+Orthogonal projector
+
+\[
+P
+=
+P^\top
+=
+P^2.
+\]
+
+Least-squares projection
+
+\[
+P
+=
+X
+(X^\top X)^{-1}
+X^\top.
+\]
+
+Projected vector
+
+\[
+\widehat y
+=
+Py.
+\]
+
+Residual
+
+\[
+r
+=
+(I-P)y.
+\]
+
+Orthogonality
+
+\[
+P(I-P)=0.
+\]
+Matrix norms
+
+Frobenius norm
+
+\[
+\|A\|_F
+=
+\sqrt{
+\sum_{i,j}
+a_{ij}^2
+}.
+\]
+
+Spectral norm
+
+\[
+\|A\|_2
+=
+\sigma_{\max}(A).
+\]
+
+Nuclear norm
+
+\[
+\|A\|_*
+=
+\sum_i
+\sigma_i(A).
+\]
+Matrix completion
+
+Projection operator
+
+\[
+P_\Omega(X).
+\]
+
+Optimization problem
+
+\[
+\min_M
+\;
+\frac12
+\|
+P_\Omega(X-M)
+\|_F^2
++
+\lambda
+\|M\|_*.
+\]
+Student-(t) distribution
+\[
+X
+\sim
+t_\nu(\mu,\Sigma).
+\]
+
+Student-(t) weight
+
+\[
+w_i
+=
+\frac{\nu+p}
+{\nu+\delta_i}.
+\]
+EM algorithm
+
+Expected complete-data log-likelihood
+
+\[
+Q(\theta|\theta^{(k)})
+=
+\mathbb{E}
+\left[
+\log
+p(X_{\rm obs},X_{\rm mis}\mid\theta)
+\mid
+X_{\rm obs},
+\theta^{(k)}
+\right].
+\]
+
+M-step
+
+\[
+\theta^{(k+1)}
+=
+\arg\max_\theta
+Q(\theta|\theta^{(k)}).
+\]
+Random paths
+
+A multivariate path
+
+\[
+X:
+[0,T]
+\rightarrow
+\mathbb{R}^N.
+\]
+
+Time-parametrized market trajectory
+
+\[
+t
+\mapsto
+X_t.
+\]
+Signatures
+
+Signature
+
+\[
+S(X)
+=
+\left(
+1,
+\int dX,
+\int dX\otimes dX,
+\int dX\otimes dX\otimes dX,
+\ldots
+\right).
+\]
+
+Truncated signature
+
+\[
+S^{(m)}(X).
+\]
+
+Signature distance
+
+\[
+d_{\rm sig}
+=
+\left\|
+S^{(m)}(X)
+-
+S^{(m)}(\widehat X)
+\right\|.
+\]
+Useful notation
+
+Expectation
+
+\[
+\mathbb{E}[X].
+\]
+
+Probability
+
+\[
+\mathbb{P}(A).
+\]
+
+Variance
+
+\[
+\operatorname{Var}(X).
+\]
+
+Covariance
+
+\[
+\operatorname{Cov}(X,Y).
+\]
+
+Trace
+
+\[
+\operatorname{tr}(A).
+\]
+
+Determinant
+
+\[
+\det(A).
+\]
+
+Rank
+
+\[
+\operatorname{rank}(A).
+\]
+
+Diagonal matrix
+
+\[
+\operatorname{diag}(a_1,\ldots,a_n).
+\]
+
+Identity matrix
+
+\[
+I_n.
+\]
+
+Positive-definite matrices
+
+\[
+\mathcal{S}_{++}^n.
+\]
+
+Symmetric matrices
+
+\[
+\mathcal{S}^n.
+\]
