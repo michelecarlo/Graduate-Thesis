@@ -2,9 +2,11 @@
 \label{geometry}
 
 In this section we want to develop some geometrical intuition behind the
-evaluation methods criteria and the imputation models.
+evaluation methods criteria and the imputation models, as well as why a
+missing data problem requires different methods from an usual inference
+problem.
 
-First consider a full multivariate time series of daily log returns:
+Take a multivariate time series of daily log returns:
 \[
 R =
 \begin{pmatrix}
@@ -40,7 +42,8 @@ R_i =
 \]
 
 Let us first consider each asset separately.
-We assume each return series is a realization of a square integrable random value in a Hilbert space:
+We interpret each asset return series as a finite-sample realization of an underlying square-integrable random variable
+in a Hilbert space:
 
 \[
 R_i \in
@@ -59,13 +62,126 @@ enables us to define an useful inner product
 on $L^2$, namely:
 \[
 \langle X,Y\rangle
-=
+\eqqcolon
 \mathbb{E}[XY]
 \]
 
-Now this is remarkably similar to the definition of covariance, and is equal when the mean
-of $X$ and $Y$ is zero; at the daily level this is almost the case.
+This is remarkably similar to the definition of covariance, and is equal when the mean
+of $X$ and $Y$ is zero; at the daily level this is almost the case. We can use this
+approximation to see that the covariance and correlation of two assets are a function
+of their angle in $L^2$:
 
+\[
+\langle X,Y\rangle
+\simeq
+\operatorname{Cov}(X,Y)
+\]
+
+\[
+\rho(X,Y)
+=
+\frac{\operatorname{Cov}(X,Y)}{\operatorname{Var}(X)\operatorname{Var}(Y)}
+\simeq
+\frac{\langle X,Y\rangle}
+{\|X\|\|Y\|}
+=\cos(\theta)
+\]
+
+The crucial part of this thesis is making sure that this linear geometry is preserved
+when imputing the missing data. The covariance matrix is of course the main
+object of discussion, especially since it is used so widely across finance. It is
+immediate that MSE is the squared distance of two assets.
+The other metrics like VaR have no easy interpretation in this space.
+
+\begin{figure}
+
+  \centering
+  \includegraphics[width=0.5\textwidth]{Figures/hilbert_vectors.pdf}
+  \caption{Returns as vectors in $L^2$}
+  \label{fig:hilbert}
+\end{figure}
+
+Figure \ref{fig:hilbert} is an attempt to represent this abstract space. Now let us
+turn to the realized space $\mathbb{R}^T$: the definitions above still apply, bar
+the due discretizations, but now we can represent the missing data as a projection
+of the full data.
+Write:
+\[
+R_i=P_{\mathcal O_i}R_i+P_{\mathcal M_i}R_i = R_{O_i} + R_{M_i}
+\]
+
+Where $P_{\mathcal O_i}$ is the operator that deletes the missing data and $P_{\mathcal M_i}$
+is the one that keeps it and deletes the observed one. Their ranges are clearly orthogonal under
+the usual inner product.
+The goal of our models is to approximate $R_{M_i}$ with:
+
+\[
+\hat{R}_{M_i} = h_\theta(R_{O_i}, R_{O_k \neq i})
+\]
+
+If we knew the values of $R_{M_i}$ we could run an approximation in the least
+squares sense. Given $h_\theta$, find:
+\[
+\min_\theta\|{R}_{M_i}-\hat{R}_{M_i}\|
+\]
+
+This is essentially equivalent to trying to approximate the conditional expectation,
+or in geometric terms projecting ${R}_{M_i}$ onto the space of functions in
+$R_{O_i}$ and $R_{O_k \neq i}$.
+
+
+\clearpage
+
+Let 
+\[
+R_i=(r_{1i},\ldots,r_{Ti})^\top\in\mathbb R^T
+\]
+denote the complete return vector of asset \(i\). Suppose that some entries of
+\(R_i\) are missing. We denote by
+\[
+\mathcal O_i=\{t\in\{1,\ldots,T\}: r_{ti}\text{ is observed}\}
+\]
+the set of observed time indices, and by
+\[
+\mathcal M_i=\{t\in\{1,\ldots,T\}: r_{ti}\text{ is missing}\}
+\]
+the set of missing time indices.
+
+For any subset \(A\subseteq\{1,\ldots,T\}\), define the coordinate projection
+\(P_A:\mathbb R^T\to\mathbb R^T\) by
+\[
+(P_A x)_t=
+\begin{cases}
+x_t, & t\in A,\\
+0, & t\notin A.
+\end{cases}
+\]
+Then the complete return vector decomposes as
+\[
+\boxed{
+R_i=P_{\mathcal O_i}R_i+P_{\mathcal M_i}R_i.
+}
+\]
+The first term \(P_{\mathcal O_i}R_i\) is observed, while the second term
+\(P_{\mathcal M_i}R_i\) is unobserved.
+
+Under the empirical inner product
+\[
+\langle X,Y\rangle_T=\frac1T\sum_{t=1}^T X_tY_t,
+\]
+the two components are orthogonal, because they have disjoint supports:
+\[
+\left\langle P_{\mathcal O_i}R_i,\,
+P_{\mathcal M_i}R_i\right\rangle_T=0.
+\]
+Hence,
+\[
+\|R_i\|_T^2
+=
+\|P_{\mathcal O_i}R_i\|_T^2
++
+\|P_{\mathcal M_i}R_i\|_T^2.
+\]
 
 
 \clearpage

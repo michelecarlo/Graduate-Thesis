@@ -87,10 +87,10 @@ We used three algorithms to simulate different missingness patterns:
 \subsection{Deletion}
 Deletes rows where at least one missing value is found
 
-\subsection{Inserting zeroes}
+\subsection{Replacing with mean}
 
-Consists in setting each missing return to zero. this is equivalent to setting the missing price
-to be equal to the last observed price.
+Consists in setting each missing return to its expected value. This is almost equivalent to setting the missing price
+to be equal to the last observed price, since daily returns are very close to zero.
 
 \subsection{EM}
 With student-t

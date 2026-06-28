@@ -40,6 +40,7 @@ __all__ = [
     "ZeroImputer",
     "EMImputer",
     "KNNImputer",
+    "MahalanobisKNNImputer",
     "BRITSImputer",
     "CSDIImputer",
 ]
@@ -264,6 +265,11 @@ class KNNImputer(_BaseImputer):
         self.col_mean_ = np.nan_to_num(np.nanmean(self.train_, axis=0))
         return self
 
+    def _distances(self, diff):
+        """Squared Euclidean distance per training row (``diff`` already zeroed
+        on the features the two rows don't both observe)."""
+        return (diff ** 2).sum(axis=1)
+
     def transform(self, X):
         X = _to_numpy(X)
         A = self.train_
@@ -281,7 +287,7 @@ class KNNImputer(_BaseImputer):
             both = A_obs & obs                              # (T_train, N)
             count = both.sum(axis=1)
             diff = np.where(both, A - row, 0.0)
-            d2 = (diff ** 2).sum(axis=1) * (obs.sum() / np.maximum(count, 1))
+            d2 = self._distances(diff) * (obs.sum() / np.maximum(count, 1))
             d2[count == 0] = np.inf
             order = np.argsort(d2)
 
@@ -299,7 +305,38 @@ class KNNImputer(_BaseImputer):
 
 
 # --------------------------------------------------------------------------- #
-# 5. BRITS  (Bidirectional Recurrent Imputation for Time Series)
+# 5. k-nearest neighbours, Mahalanobis distance
+# --------------------------------------------------------------------------- #
+class MahalanobisKNNImputer(KNNImputer):
+    """KNN fill using the Mahalanobis distance instead of the Euclidean one.
+
+    Same scheme as :class:`KNNImputer`, but two rows are compared with
+    ``(a - b) Sigma^{-1} (a - b)`` rather than ``(a - b)(a - b)``, so directions
+    along strongly correlated assets are down-weighted instead of double-counted.
+    The precision ``Sigma^{-1}`` is estimated once from the (mean-imputed)
+    training panel; over the features two rows both observe this uses the
+    matching block of the precision matrix.
+    """
+
+    def __init__(self, n_neighbors=5, weights="distance", ridge=1e-6):
+        super().__init__(n_neighbors=n_neighbors, weights=weights)
+        self.ridge = ridge
+
+    def fit(self, X, y=None):
+        super().fit(X)
+        Xf = np.where(np.isnan(self.train_), self.col_mean_, self.train_)
+        N = Xf.shape[1]
+        Sigma = np.cov(Xf, rowvar=False) + self.ridge * np.eye(N)
+        self.precision_ = np.linalg.inv(Sigma)
+        return self
+
+    def _distances(self, diff):
+        """Mahalanobis squared distance over the co-observed features."""
+        return ((diff @ self.precision_) * diff).sum(axis=1)
+
+
+# --------------------------------------------------------------------------- #
+# 6. BRITS  (Bidirectional Recurrent Imputation for Time Series)
 # --------------------------------------------------------------------------- #
 def _time_gaps(mask):
     """BRITS delta: time since each feature was last observed, per window.
