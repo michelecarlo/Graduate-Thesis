@@ -29,6 +29,8 @@ enough to train on CPU.
 from __future__ import annotations
 
 import math
+import pickle
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -111,6 +113,25 @@ class _BaseImputer:
 
     def fit_transform(self, X, y=None):
         return self.fit(X).transform(X)
+
+    def save(self, path):
+        """Pickle the whole fitted imputer to ``path``.
+
+        Captures everything needed to restore the model later -- for the neural
+        imputers that means the network weights *and* the optimizer state, plus
+        the standardisation stats and ``loss_history_`` -- so a fresh kernel can
+        reload it and (with ``warm_start=True``) continue training from here.
+        """
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        with open(path, "wb") as f:
+            pickle.dump(self, f)
+        return self
+
+    @staticmethod
+    def load(path):
+        """Reload an imputer previously written with :meth:`save`."""
+        with open(path, "rb") as f:
+            return pickle.load(f)
 
     def _log(self, epoch, loss):
         """Record an epoch's mean training loss (and optionally print it)."""
@@ -426,38 +447,47 @@ class BRITSImputer(_BaseImputer):
     """
 
     def __init__(self, hidden=64, window=100, epochs=300, lr=1e-3,
-                 batch_size=16, random_state=0, device="cpu", verbose=False):
+                 batch_size=16, random_state=0, warm_start=False,
+                 device="cpu", verbose=False):
         self.hidden = hidden
         self.window = window
         self.epochs = epochs
         self.lr = lr
         self.batch_size = batch_size
         self.random_state = random_state
+        self.warm_start = warm_start
         self.device = device
         self.verbose = verbose
 
     def fit(self, X, y=None):
-        torch.manual_seed(self.random_state)
         X = _to_numpy(X)
         observed = (~np.isnan(X)).astype(np.float32)
-        Xs, self.mu_, self.sd_ = _standardize(X, observed.astype(bool))
+        dev = torch.device(self.device)
+
+        # warm start: keep the existing weights, optimizer state and scaling and
+        # train further on top of them; otherwise build everything fresh.
+        resume = self.warm_start and getattr(self, "net_", None) is not None
+        if resume:
+            Xs = np.where(observed.astype(bool), (X - self.mu_) / self.sd_, 0.0)
+        else:
+            torch.manual_seed(self.random_state)
+            Xs, self.mu_, self.sd_ = _standardize(X, observed.astype(bool))
+            self.net_ = _BRITSNet(X.shape[1], self.hidden).to(dev)
+            self.opt_ = torch.optim.Adam(self.net_.parameters(), lr=self.lr)
+            self.loss_history_ = []
 
         xw, _ = _to_windows(Xs.astype(np.float32), self.window)
         mw, _ = _to_windows(observed, self.window)
         dw_f = _time_gaps(mw)
         dw_b = _time_gaps(mw[:, ::-1].copy())
 
-        dev = torch.device(self.device)
         x = torch.tensor(xw, device=dev)
         m = torch.tensor(mw, device=dev)
         df = torch.tensor(dw_f, device=dev)
         db = torch.tensor(dw_b, device=dev)
 
-        self.net_ = _BRITSNet(X.shape[1], self.hidden).to(dev)
-        opt = torch.optim.Adam(self.net_.parameters(), lr=self.lr)
-
+        opt = self.opt_
         n = x.shape[0]
-        self.loss_history_ = []
         self.net_.train()
         for epoch in range(self.epochs):
             perm = torch.randperm(n, device=dev)
@@ -590,7 +620,7 @@ class CSDIImputer(_BaseImputer):
 
     def __init__(self, window=32, stride=None, channels=32, n_layers=2, n_heads=4,
                  n_steps=50, epochs=100, lr=1e-3, batch_size=16,
-                 n_samples=1, random_state=0, device="cpu",
+                 n_samples=1, random_state=0, warm_start=False, device="cpu",
                  verbose=False):
         self.window = window
         # overlapping training windows -> many more, more densely sampled training
@@ -605,6 +635,7 @@ class CSDIImputer(_BaseImputer):
         self.batch_size = batch_size
         self.n_samples = n_samples
         self.random_state = random_state
+        self.warm_start = warm_start
         self.device = device
         self.verbose = verbose
 
@@ -615,26 +646,33 @@ class CSDIImputer(_BaseImputer):
         return beta, alpha, torch.cumprod(alpha, dim=0)
 
     def fit(self, X, y=None):
-        torch.manual_seed(self.random_state)
         X = _to_numpy(X)
         observed = ~np.isnan(X)
-        Xs, self.mu_, self.sd_ = _standardize(X, observed)
+        dev = torch.device(self.device)
+
+        # warm start: keep the existing weights, optimizer state and scaling and
+        # train further on top of them; otherwise build everything fresh.
+        resume = self.warm_start and getattr(self, "net_", None) is not None
+        if resume:
+            Xs = np.where(observed, (X - self.mu_) / self.sd_, 0.0)
+        else:
+            torch.manual_seed(self.random_state)
+            Xs, self.mu_, self.sd_ = _standardize(X, observed)
+            self.net_ = _CSDINet(X.shape[1], self.window, self.channels,
+                                 self.n_layers, self.n_heads).to(dev)
+            self.opt_ = torch.optim.Adam(self.net_.parameters(), lr=self.lr)
+            self.loss_history_ = []
 
         # overlapping windows for training (many more samples than a clean tiling)
         xw, _ = _to_windows(Xs.astype(np.float32), self.window, self.stride)
         mw, _ = _to_windows(observed.astype(np.float32), self.window, self.stride)
 
-        dev = torch.device(self.device)
         x0 = torch.tensor(xw, device=dev)
         om = torch.tensor(mw, device=dev)
         beta, alpha, abar = self._schedule(dev)
 
-        self.net_ = _CSDINet(X.shape[1], self.window, self.channels,
-                             self.n_layers, self.n_heads).to(dev)
-        opt = torch.optim.Adam(self.net_.parameters(), lr=self.lr)
-
+        opt = self.opt_
         n = x0.shape[0]
-        self.loss_history_ = []
         self.net_.train()
         for epoch in range(self.epochs):
             perm = torch.randperm(n, device=dev)
