@@ -59,7 +59,249 @@ far it deviates from the case where all data is observed.
 \section{Literature review}
 \label{sec:literature}
 
+The literature on missing data is vast and spread across statistics,
+econometrics and, more recently, machine learning. Rather than
+attempting an exhaustive survey, we trace the ideas this thesis
+directly builds on: the foundational framework that defines what
+missingness is, the classical likelihood-based methods with the EM
+algorithm at their core, the progressive shift towards algorithmic and
+deep learning imputers, and finally how these tools have been absorbed
+by economics and finance.
 
+\subsection{Foundations}
+\label{sec:lit_foundations}
+
+Until the mid-1970s missing data was mostly treated as a nuisance to
+be engineered away: incomplete records were dropped, or filled in with
+some convenient value, and the analysis proceeded as if nothing had
+happened. The turning point is \citet{rubin1976}, who proposed to
+treat missingness itself as a random object. Given a data matrix and
+an indicator matrix flagging which entries are observed, the joint
+distribution factorizes into the law of the data and the law of the
+\emph{missingness mechanism}, the conditional distribution of the
+indicators given the data. Rubin's classification of this mechanism
+is still the standard language of the field: data are missing
+completely at random (MCAR) when the mechanism is independent of the
+data; missing at random (MAR) when it depends only on the observed
+part; and missing not at random (MNAR) otherwise. The central result
+of the paper is \emph{ignorability}: under MAR, plus a
+parameter-distinctness condition, likelihood-based and Bayesian
+inference can ignore the mechanism altogether and work with the
+observed-data likelihood. This single result justifies most of the
+methods in this thesis; whenever it fails, as in the stressed
+missingness pattern of Section~\ref{sec:missingness}, every method
+that relies on it stands on shaky ground.
+
+The monograph of \citet{little2019}, first published in 1987,
+organized the field around this framework and remains its canonical
+reference. Their taxonomy of approaches (complete-case analysis,
+weighting, single imputation, likelihood-based methods) is still the
+way the subject is taught, and their analysis of the simple methods is
+directly relevant here: listwise deletion is unbiased only under MCAR
+and can discard a dramatic fraction of the sample, while unconditional
+mean imputation distorts variances and correlations even under MCAR.
+These are precisely the two baselines we adopt in
+Chapter~\ref{ch:methodology}, and the literature predicts their
+failure modes quite exactly.
+
+Two other foundational strands deserve mention. The first is
+weighting: instead of imputing, one reweights the complete cases by
+the inverse of their probability of being observed.
+\citet{robins1994} developed this idea into a full semiparametric
+theory, including doubly robust estimators; \citet{seaman2013} give an
+accessible review. The second is \emph{multiple imputation},
+introduced by \citet{rubin1987}: draw several imputed datasets from
+the posterior predictive distribution of the missing values, analyse
+each one as if it were complete, and combine the results with simple
+rules that propagate the imputation uncertainty into the final
+standard errors \citep[see also][]{rubin1996}. Multiple imputation is
+the historical answer to a criticism that applies to every
+single-imputation method in this thesis: an imputed dataset treated as
+real understates uncertainty, because imputed values are estimates,
+not observations.
+
+The MNAR case is fundamentally harder, since the mechanism is not
+identifiable from the observed data alone and any analysis rests on
+untestable assumptions. In econometrics the problem was attacked
+early and largely independently by \citet{heckman1979}, whose
+sample-selection model corrects for non-randomly missing outcomes
+through an explicit model of the selection process; it remains the
+standard MNAR tool in applied economics. In biostatistics the
+accepted practice is sensitivity analysis across plausible mechanisms
+\citep{molenberghs2007}. Finally, the translation of MAR to
+dependent, dynamically evolving data is more subtle than it appears;
+\citet{mar_stochastic2022} give a rigorous stochastic-process
+formulation, which is the natural setting for financial time series.
+
+\subsection{Likelihood methods and the EM algorithm}
+\label{sec:lit_em}
+
+Once ignorability is granted, inference reduces to maximizing the
+observed-data likelihood, which almost never has a closed form because
+the missing entries must be integrated out. The
+Expectation--Maximization algorithm of \citet{dempster1977} is the
+fundamental tool for this task, and arguably the most important paper
+in the field after \citet{rubin1976}. Its logic mirrors the structure
+of the problem: the E-step computes the conditional expectation of the
+complete-data log-likelihood given the observed data and the current
+parameters, and the M-step maximizes it. The paper proved that each
+iteration increases the observed likelihood, unified a large number of
+pre-existing special-purpose schemes, and named the method. The
+convergence theory was completed by \citet{wu1983}, who fixed a flaw
+in the original proof and gave the regularity conditions under which
+EM converges to a stationary point. Since EM never forms the observed
+information matrix, standard errors require extra work;
+\citet{louis1982} showed how to recover them from complete-data
+quantities. Among the many refinements that followed, the ECM and
+ECME algorithms \citep{meng1993, liu1994} replace the M-step with
+cheaper conditional maximizations; \citet{mclachlan2008} is the
+standard book-length treatment.
+
+For our purposes the relevant instance is EM for the mean vector and
+covariance matrix of an incomplete multivariate normal sample
+\citep[Ch.~11]{little2019}: the E-step reduces to linear regressions
+of the missing coordinates on the observed ones, and the fixed point
+delivers both the maximum likelihood estimate of $(\bmu, \bSigma)$
+and, as a by-product, conditional-expectation imputations. Since
+daily returns are decidedly non-Gaussian \citep{cont2001}, the robust
+variant matters: \citet{little1988} derived EM for the multivariate
+Student-$t$, whose E-step simply downweights outlying observations,
+and \citet{liu1995} made its estimation practical via ECME. This is
+the version we implement in Chapter~\ref{ch:methodology}.
+
+The time series counterpart of this machinery is the state-space
+framework. The Kalman filter \citep{kalman1960} accommodates missing
+observations with no modification at all: when a measurement is
+absent, the update step is skipped and the prediction carries through.
+\citet{jones1980} exploited this to fit ARMA models to incomplete
+series by exact maximum likelihood, and \citet{shumway1982} closed the
+loop with EM: the Kalman smoother computes exactly the conditional
+expectations the E-step requires, so parameter estimation and
+imputation come out of the same iteration. \citet{harvey1984} applied
+these ideas to economic time series, \citet{kohn1986} settled exact
+interpolation for ARIMA models, and the monographs of
+\citet{harvey1989} and \citet{durbin2012} remain the references for
+the general theory.
+
+\subsection{From multiple imputation to machine learning}
+\label{sec:lit_ml}
+
+On the applied side, the 1990s and 2000s standardized imputation
+practice. \citet{schafer1997} provided workable algorithms for
+multiple imputation under joint multivariate models, and the chained
+equations approach of \citet{vanbuuren2011} replaced the joint model
+with a sequence of univariate conditional models, one per variable,
+cycled until convergence; its flexibility made it the de facto
+standard in biostatistics and the social sciences.
+\citet{vanbuuren2018} gives a modern account of the whole practice.
+
+In parallel, a more algorithmic tradition developed methods that
+dispense with an explicit probability model. $k$-nearest-neighbours
+imputation was popularized by \citet{troyanskaya2001} for gene
+expression data and transfers directly to return panels: a missing
+entry is filled with a weighted average of the corresponding entries
+of similar rows (dates, in our case); random forests followed
+\citep{stekhoven2012}. A distinct and elegant line is low-rank matrix
+completion \citep{candes2009, mazumder2010}, which recovers missing
+entries under the assumption that the data matrix is approximately
+low-rank, a natural assumption for equity returns where a few factors
+explain most of the covariance.
+
+Deep learning entered the field once recurrent networks were adapted
+to irregular inputs. GRU-D \citep{grud} feeds the missingness mask
+and the time since the last observation into a gated recurrent unit
+with learned decay; BRITS \citep{cao2018} treats imputations as
+variables of a bidirectional recurrent graph, trained by consistency
+between the two directions, and requires no assumption on the
+generating process. Generative approaches recast imputation as
+conditional sampling: GAIN adapts adversarial training
+\citep{yoon2018}, GP-VAE combines a variational autoencoder with a
+Gaussian process prior in latent space \citep{fortuin2020}, SAITS
+relies on self-attention \citep{du2023}, and CSDI \citep{tashiro2021}
+uses conditional score-based diffusion, producing a full predictive
+distribution for the missing values rather than a point estimate,
+which is why we select it as our generative representative.
+\citet{deeplearning_survey2024} survey this rapidly growing area, and
+\citet{missingsignals2024} bridge it with the signal processing
+literature.
+
+Two caveats recur across this literature. First, essentially all deep
+imputers assume MAR, usually implicitly through their masked training
+objective; identification under more general mechanisms has been
+studied only very recently \citep{causalview2025}. Second, evaluation
+is almost universally pointwise, RMSE or MAE on artificially masked
+entries, which says little about whether the joint distribution, and
+in particular the covariance structure, survives imputation. Both
+caveats are starting points for this thesis.
+
+\subsection{Applications in economics and finance}
+\label{sec:lit_finance}
+
+In economics, missing data rarely goes by that name. The oldest
+example is non-synchronous trading: \citet{scholes1977} showed that
+stale prices, which are in effect missing prices carried forward, bias
+beta estimates, and derived corrected estimators. This is exactly the
+last-observation-carried-forward distortion described in
+Section~\ref{sec:motivation}.
+
+The macroeconometric literature turned missing data handling into
+routine practice, because macro datasets are incomplete by
+construction: series are released at mixed frequencies and with
+staggered publication lags (the so-called ragged edge).
+\citet{stock2002} used an EM--principal-components iteration to
+extract factors from large unbalanced panels; \citet{mariano2003}
+treated quarterly GDP as a monthly series with two out of three values
+missing, estimated in state-space form; \citet{giannone2008}
+formalized nowcasting, where the Kalman filter absorbs data releases
+as they arrive; and \citet{doz2012} and \citet{banbura2014} developed
+maximum likelihood estimation of large factor models under arbitrary
+missingness patterns, essentially scaling \citet{shumway1982} to
+hundreds of series. This machinery runs in production at central
+banks today. For panels with a time dimension, \citet{honaker2010}
+adapted multiple imputation to time-series cross-section data, noting
+that off-the-shelf procedures ignore temporal smoothness.
+
+In finance proper, the seminal reference is \citet{stambaugh1997},
+who considered assets whose return histories start at different dates,
+the typical shape of any real multi-asset panel, and derived maximum
+likelihood estimators of means and covariances that use the long
+histories to sharpen the moments of the short ones. The message, that
+discarding incomplete history throws away information about the
+covariance matrix, is a direct ancestor of our evaluation criteria.
+\citet{kofman2003} later imported multiple imputation into empirical
+finance, showing on several canonical applications that complete-case
+analysis materially biases the conclusions.
+
+The topic has recently returned to the centre of asset pricing,
+driven by the firm-characteristics panels used in cross-sectional
+factor models, where the majority of entries can be missing.
+\citet{bryzgalova2025} document that the profession's ad hoc fixes,
+typically cross-sectional medians, are not innocuous: the choice of
+imputation changes the estimated risk premia, and they propose a
+factor-based imputation exploiting both cross-sectional and time
+series dependence. In parallel, \citet{freyberger2025} show that firm
+characteristics are missing \emph{not} at random and develop
+estimators that remain consistent under such mechanisms. Both papers
+make, in the cross-section of characteristics, the point this thesis
+makes for return panels: what matters is not the imputation error
+itself but its effect on the downstream object of interest. Finally,
+\citet{wasserstein2021} highlight a specifically financial pitfall:
+imputing with a model trained on the full sample leaks future
+information into the imputed values, and they formalize the resulting
+trade-off between look-ahead bias and imputation variance.
+
+Summing up, the statistical literature provides the taxonomy of
+mechanisms and the classical estimators, the machine learning
+literature provides increasingly powerful conditional models trained
+under an implicit MAR assumption, and the finance literature provides
+both the warning that missingness is often MNAR precisely when it
+matters most (crises, illiquidity) and the reminder that imputation
+should be judged by the downstream model. The experimental design of
+this thesis, controlled injection of MCAR and MNAR patterns into a
+complete equity panel, classical and deep imputers side by side, and
+evaluation on covariance geometry, risk measures and portfolio
+construction rather than pointwise error alone, sits deliberately at
+the intersection of these three strands.
 
 \section{Research questions}
 \label{sec:questions}

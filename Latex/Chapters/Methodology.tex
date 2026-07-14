@@ -59,12 +59,12 @@ We used three algorithms to simulate different missingness patterns:
 \begin{enumerate}
     \item \textbf{Sparse}: each scalar $r_{t,k}$ is missing with probability $r$, independent of the rest
     of the dataset. This is the easiest example of MCAR and can simulate a randomly corrupted dataset;
-    \item \textbf{Contiguous gaps}: a point $r_{t,k}$ is chosen at random and eliminated. Then subsequent observations
+    \item \textbf{Contiguous gaps}: $n$ points $r_{t,k}$ are chosen at random and eliminated. Then subsequent observations
     of the same variable $r_{t+1,k}$, \dots, $r_{t+h,k}$ get deleted according to an exponential decay
     with rate $\lambda$. This is still an example of MCAR and can be thought to simulate assets
     failing to trade because of random shortages of liquidity;
     \item \textbf{Stressed}: we calculate index squared returns for each date $t$ and rank them. Then,
-    returns whose date is above a certain percentile get deleted with probability $h$, while the rest
+    returns whose date is above a certain percentile $p$get deleted with probability $h$, while the rest
     still go missing with rate $r$. This simulates shortages of liquidity or circuit breaks that happen
     when markets experience high levels of volatility; since the missingness of a given
     $r_{t,k}$ is injected conditional on all the other values of the dataset, this is an example of MNAR.
@@ -76,6 +76,20 @@ We used three algorithms to simulate different missingness patterns:
   \includegraphics[width=\textwidth]{Figures/missingness_examples.pdf}
   \caption{Missingness Examples}
   \label{fig:missingness}
+\end{figure}
+
+For each of the three missingness patterns, we will vary the parameters $r$, $\lambda$, and $h$ to
+simulate different levels of missingness. Furthermore, we will make it so that the ratio of missing
+values is the same for each level of missingness in each pattern, so that we can compare the performance
+of the different imputation methods in a sensible way.
+The exact values of the parameters are reported in Table \ref{tab:missingness_params}. The column "Rate"
+reports the expected value of the missigness ratio for each pattern.
+
+\begin{figure}
+  \centering
+  \includegraphics[width=\textwidth]{Figures/missingness_table.pdf}
+  \caption{Missingness parameters}
+  \label{tab:missingness_params}
 \end{figure}
 
 
