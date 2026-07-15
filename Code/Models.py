@@ -18,6 +18,7 @@ Implemented here, from the ground up:
     ZeroImputer      -- replace missing entries with 0 (the "no move" return)
     EMImputer        -- Gaussian expectation-maximisation (Little & Rubin)
     KNNImputer       -- k-nearest-neighbour fill on co-observed features
+    LowRankImputer   -- low-rank matrix completion (SoftImpute)
     BRITSImputer     -- Bidirectional Recurrent Imputation (PyTorch)
     CSDIImputer      -- Conditional Score-based Diffusion Imputation (PyTorch)
 
@@ -43,6 +44,7 @@ __all__ = [
     "EMImputer",
     "KNNImputer",
     "MahalanobisKNNImputer",
+    "LowRankImputer",
     "BRITSImputer",
     "CSDIImputer",
 ]
@@ -357,7 +359,69 @@ class MahalanobisKNNImputer(KNNImputer):
 
 
 # --------------------------------------------------------------------------- #
-# 6. BRITS  (Bidirectional Recurrent Imputation for Time Series)
+# 6. Low-rank matrix completion (SoftImpute)
+# --------------------------------------------------------------------------- #
+class LowRankImputer(_BaseImputer):
+    """Low-rank matrix completion via iterative truncated SVD.
+
+    Following Mazumder, Hastie & Tibshirani (2010), alternate between
+    rebuilding the panel from a reduced SVD and restoring the observed
+    entries, until the completed panel stops changing.  The low-rank
+    assumption is natural for equity returns, where a few factors drive most
+    of the covariance, so the default is a hard ``rank`` cap (keep the top
+    ``rank`` components exactly).  Setting ``shrinkage > 0`` instead
+    soft-thresholds the singular values by that fraction of the largest one,
+    giving the nuclear-norm-regularised SoftImpute variant (which shrinks
+    the imputations toward zero, damping the covariance -- hence not the
+    default here).
+
+    The panel is standardised per asset before completion.  Like the other
+    instant imputers the whole computation happens in :meth:`transform`;
+    ``loss_history_`` records the relative change of the completed panel per
+    iteration (-> 0 at convergence).
+    """
+
+    def __init__(self, rank=5, shrinkage=0.0, max_iter=200, tol=1e-5,
+                 verbose=False):
+        self.rank = rank
+        self.shrinkage = shrinkage
+        self.max_iter = max_iter
+        self.tol = tol
+        self.verbose = verbose
+
+    def transform(self, X):
+        X = _to_numpy(X)
+        observed = ~np.isnan(X)
+        Xs, mu, sd = _standardize(X, observed)
+
+        Z = Xs.copy()                            # zero-filled start
+        lam = 0.0
+        if self.shrinkage:
+            lam = self.shrinkage * np.linalg.svd(Z, compute_uv=False)[0]
+        self.loss_history_ = []
+
+        for it in range(self.max_iter):
+            U, s, Vt = np.linalg.svd(Z, full_matrices=False)
+            s = np.maximum(s - lam, 0.0)
+            if self.rank is not None:
+                s[self.rank:] = 0.0
+            Z_new = np.where(observed, Xs, (U * s) @ Vt)
+
+            delta = np.linalg.norm(Z_new - Z) / (np.linalg.norm(Z) + 1e-12)
+            self.loss_history_.append(delta)
+            if self.verbose:
+                print(f"LowRank iter {it + 1:3d}/{self.max_iter}  "
+                      f"rank {int((s > 0).sum()):2d}  update {delta:.2e}")
+            Z = Z_new
+            if delta < self.tol:
+                break
+
+        self.rank_ = int((s > 0).sum())
+        return np.where(observed, X, Z * sd + mu)
+
+
+# --------------------------------------------------------------------------- #
+# 7. BRITS  (Bidirectional Recurrent Imputation for Time Series)
 # --------------------------------------------------------------------------- #
 def _time_gaps(mask):
     """BRITS delta: time since each feature was last observed, per window.
@@ -527,7 +591,7 @@ class BRITSImputer(_BaseImputer):
 
 
 # --------------------------------------------------------------------------- #
-# 6. CSDI  (Conditional Score-based Diffusion Imputation)
+# 8. CSDI  (Conditional Score-based Diffusion Imputation)
 # --------------------------------------------------------------------------- #
 class _ResBlock(nn.Module):
     """A CSDI residual block: temporal attention, then feature attention."""
