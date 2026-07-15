@@ -99,28 +99,132 @@ reports the expected value of the missigness ratio for each pattern.
 \label{sec:models}
 
 \subsection{Deletion}
-Deletes rows where at least one missing value is found
+
+The baseline of complete-case analysis: every date containing at least one
+missing value is dropped, and all downstream estimation runs on the surviving
+complete rows. Under MCAR the retained dates are a random subsample of the
+panel, so moment estimates remain consistent \citep{little2019}; the cost is
+statistical efficiency, and in the cross-section it is severe. With sparse
+missingness at rate $r$, a date survives with probability $(1-r)^N$: at
+$r=0.05$ and $N=50$ assets, fewer than $8\%$ of the dates survive. Under the
+stressed pattern the damage changes nature rather than size: the deleted
+dates are exactly the turbulent ones, so the surviving subsample is calm by
+construction and every risk measure computed from it is biased downwards, no
+matter how much data is left.
 
 \subsection{Mean Replacement}
 
-Consists in setting each missing return to its expected value. This is almost equivalent to setting the missing price
+The simplest imputation that preserves the shape of the panel consists in
+setting each missing return to its unconditional expected value. This is almost equivalent to setting the missing price
 to be equal to the last observed price, since daily returns are very close to zero.
+The mean of the panel is preserved, but every second moment is damped:
+under sparse missingness at rate $r$, a variance term survives whenever its
+entry is observed while a covariance term needs both entries at once, so
+estimated volatilities scale by $\sqrt{1-r}$ and pairwise correlations by
+$(1-r)$, shrinking the covariance matrix towards its diagonal. Under the
+stressed pattern the distortion is stronger still, because the entries being
+replaced are on average the largest ones. This predictable failure is
+precisely what the structural metrics of Section~\ref{sec:eval} are designed
+to expose.
 
 \subsection{Low Rank Matrix Completion}
 
-\subsection{EM}
-With student-t
+A few pervasive factors describe most of the covariance of equity returns,
+so the return panel is close to a low-rank matrix plus idiosyncratic noise.
+Matrix completion turns this observation into an imputation device: if the
+underlying matrix has rank $q \ll N$, the missing entries can be recovered
+from the observed ones -- exactly so, under conditions on the missingness
+pattern and on how spread out the factors are \citep{candes2009}. We adopt
+the iterative-SVD scheme of \citet{mazumder2010}: standardise each asset on
+its observed entries, fill the missing cells with zeros, then alternate
+between projecting the completed panel onto the set of rank-$q$ matrices
+(truncated SVD) and restoring the observed entries, until the panel stops
+changing. The fixed point fills every missing cell with a $q$-factor
+reconstruction estimated on the fly, without ever specifying the factors.
+The nuclear-norm variant of the same algorithm, which soft-thresholds the
+singular values instead of truncating them, shrinks every imputed entry
+towards zero and thereby inherits a milder version of the covariance damping
+of mean replacement; we therefore keep the hard rank constraint, with $q$
+small, in line with the number of pervasive equity factors.
 
-\cite{dempster1977}
+\subsection{EM}
+
+Our likelihood-based model treats the dates as i.i.d.\ draws
+$r_t \sim \mathcal{N}(\bmu, \bSigma)$ and maximises the resulting
+observed-data likelihood with the EM algorithm of \citet{dempster1977}.
+Write $r_t = (r_{t,o}, r_{t,m})$ for the observed and missing parts of date
+$t$ (the split changes from date to date). The E-step fills each missing
+block with its conditional expectation,
+\[
+\E\left[r_{t,m} \mid r_{t,o}\right]
+= \bmu_m + \bSigma_{mo}\,\bSigma_{oo}^{-1}\left(r_{t,o} - \bmu_o\right),
+\]
+while the M-step re-estimates $\bmu$ and $\bSigma$ from the completed panel,
+adding back the conditional covariance
+$\bSigma_{mm} - \bSigma_{mo}\bSigma_{oo}^{-1}\bSigma_{om}$ of the cells just
+filled -- the correction that separates EM from naively iterating a
+regression fill, which would understate the covariance. At convergence we
+obtain the maximum likelihood estimate $(\hat{\bmu}, \hat{\bSigma})$ and, as
+a by-product, imputations that are exactly the $L^2$ projections discussed
+in Section~\ref{geometry}. In the implementation, dates sharing the same
+missingness pattern are grouped together, so each pattern costs a single
+linear solve per iteration. Daily returns are of course heavier-tailed than
+the Gaussian assumption wants; the same iteration extends to a multivariate
+Student-$t$, whose E-step gains a per-date weight, decreasing in the
+Mahalanobis distance of the observed block, that discounts extreme dates in
+the update of $(\bmu, \bSigma)$ \citep{little1988, liu1995}.
 
 \subsection{KNN}
 
+$k$-nearest-neighbours imputation, first popularised on gene-expression data
+by \citet{troyanskaya2001}, is the donor-based, fully non-parametric member
+of our set. To fill date $t$, its distance to every other date is computed
+as the Euclidean distance over the assets both dates observe, rescaled by
+the number of co-observed assets so that sparser rows are not mechanically
+favoured; the missing return $r_{t,i}$ is then the inverse-distance-weighted
+average of $r_{s,i}$ over the $k$ closest dates $s$ that do observe asset
+$i$. Nothing about the scheme is temporal: donors are selected by
+cross-sectional similarity, wherever they sit in the sample. No
+distributional assumption is needed, but the method degrades exactly where
+donors become unreliable: under heavy missingness the distances rest on few
+co-observed assets, and under the stressed pattern the extreme dates that
+most need filling have no close, well-observed counterparts to borrow from.
 
 \subsection{BRITS}
 
-\cite{cao2018}
+BRITS \citep{cao2018} is our recurrent neural representative. A window of
+the panel is processed by two LSTMs, one per time direction. At each step
+the hidden state is first decayed by a factor learned from the time elapsed
+since each asset was last observed, so that the memory of a stale reading
+fades, and two candidate fills are produced: a history-based estimate
+regressed from the hidden state, and a cross-sectional estimate regressed
+from the other assets at the same date. A learned gate blends the two, the
+blend replaces the missing entries, and the completed vector is fed to the
+next step, so the imputations themselves carry gradients through the
+network. Training is self-supervised: the network learns to reconstruct the
+entries that are observed, with a penalty tying the forward and backward
+passes together, and the missing cells are then read out of the trained
+network. No explicit model of the returns or of the missingness mechanism
+is assumed.
 
 \subsection{CSDI}
+
+CSDI \citep{tashiro2021} adapts denoising diffusion models \citep{ho2020} to
+imputation. In a diffusion model, data is progressively corrupted by
+Gaussian noise over many small steps until only noise remains, and a network
+is trained to undo one corruption step at a time; generation then amounts to
+running the learned chain backwards from pure noise. CSDI makes this chain
+conditional: the denoising network -- a transformer applying attention along
+time and across assets \citep{vaswani2017} -- always sees the clean observed
+entries while denoising the missing ones. Training is self-supervised,
+hiding a random share of the observed cells and learning to denoise them
+given the rest. At inference the chain starts from noise on the missing
+cells, with the observed ones held fixed throughout, and each pass produces
+one draw from the predictive distribution of the missing block given the
+observed panel; the final imputation is the median over several draws. CSDI
+is thus the one genuinely probabilistic model of our set -- the dispersion
+of its draws is a built-in estimate of the imputation uncertainty, which no
+other model here provides.
 
 
 \section{Evaluation Methods}
