@@ -230,16 +230,117 @@ other model here provides.
 \section{Evaluation Methods}
 \label{sec:eval}
 
-MSE
+Every experiment produces, for a given missingness pattern and level, an
+imputed panel $\widehat{R} \in \R^{T \times N}$ to be compared against the
+ground truth $R$ of Section~\ref{sec:data}. Let
+$\mathcal{M} = \{(t,k) : r_{t,k} \text{ was deleted}\}$ denote the set of
+imputed cells and $|\mathcal{M}|$ its cardinality. Since our stated goal is
+not the recovery of individual values but of the panel a downstream model
+would have been trained on, we score the imputations with two families of
+metrics. \emph{Pointwise} metrics are computed on the imputed cells alone
+-- the observed cells are returned untouched by every model, and including
+them would only dilute the error -- and measure how close each filled value
+is to the deleted one. \emph{Structural} metrics instead compare statistics
+computed from the two full panels, and measure whether the objects that
+downstream models actually consume (covariances, volatilities, tail
+quantiles, path functionals) survive the imputation. The two families need
+not agree: a method can be nearly optimal pointwise and still destroy the
+second-moment structure, as mean replacement shows. Deletion is the
+exception in what follows: it returns a panel with fewer rows, so the
+pointwise metrics are not defined for it and the structural ones are
+computed on the surviving subsample.
 
-MAEa
+\begin{enumerate}
+    \item \textbf{MAE}: the mean absolute error on the imputed cells,
+    \[
+    \mathrm{MAE}
+    = \frac{1}{|\mathcal{M}|} \sum_{(t,k) \in \mathcal{M}}
+      \left| \hat{r}_{t,k} - r_{t,k} \right| ,
+    \]
+    expressed in return units and robust to occasional large misses.
 
-CovErr = \[
-\frac{\lVert \widehat{\Sigma}_{\mathrm{imp}} - \Sigma_{\mathrm{true}} \rVert}
-     {\lVert \Sigma_{\mathrm{true}} \rVert}
-\]
+    \item \textbf{RMSE}: the root mean squared error on the same cells,
+    \[
+    \mathrm{RMSE}
+    = \left( \frac{1}{|\mathcal{M}|} \sum_{(t,k) \in \mathcal{M}}
+      \left( \hat{r}_{t,k} - r_{t,k} \right)^2 \right)^{1/2} .
+    \]
+    This is the sample counterpart of the $L^2$ distance of
+    Section~\ref{geometry}: the imputation minimising its expectation is the
+    conditional expectation given the observed data, so RMSE rewards exactly
+    the projections that the likelihood-based models construct, while
+    penalising large errors quadratically.
 
+    \item \textbf{Covariance error}: the relative Frobenius error of the
+    sample covariance matrix,
+    \[
+    \mathrm{CovErr}
+    = \frac{\lVert \widehat{\bSigma} - \bSigma \rVert_F}
+           {\lVert \bSigma \rVert_F} ,
+    \]
+    where $\bSigma$ and $\widehat{\bSigma}$ are estimated from the true and
+    the imputed panel respectively. This is our central structural metric:
+    the covariance matrix is the object whose geometry
+    (Section~\ref{geometry}) we set out to preserve, and the input of
+    essentially every allocation and risk model built downstream.
 
-VaR
+    \item \textbf{Volatility error}: the mean relative error of the
+    per-asset sample volatilities,
+    \[
+    \mathrm{VolErr}
+    = \frac{1}{N} \sum_{k=1}^{N}
+      \frac{\left| \hat{\sigma}_k - \sigma_k \right|}{\sigma_k} .
+    \]
+    It isolates the diagonal of $\bSigma$, so that a moderate CovErr cannot
+    conceal a systematic damping of the variances -- the failure mode, scaling
+    as $\sqrt{1-r}$, identified for mean replacement in
+    Section~\ref{sec:models}.
 
-Minimum Variance Portfolio
+    \item \textbf{Value-at-Risk error}: for each asset the empirical VaR at
+    level $\alpha = 0.05$ is the (sign-flipped) empirical $\alpha$-quantile
+    of its return series, $\mathrm{VaR}_\alpha(k) = -\hat{q}_\alpha(R_k)$,
+    and we report
+    \[
+    \mathrm{VaRErr}
+    = \frac{1}{N} \sum_{k=1}^{N}
+      \left| \widehat{\mathrm{VaR}}_\alpha(k) - \mathrm{VaR}_\alpha(k) \right| .
+    \]
+    This probes the left tail beyond the second moment, the region that risk
+    management actually regulates -- and precisely the region that the
+    stressed pattern of Section~\ref{sec:missingness} empties out.
+
+    \item \textbf{Wasserstein error}: the mean 1-Wasserstein distance
+    between the per-asset marginal return distributions,
+    \[
+    \mathrm{WassErr}
+    = \frac{1}{N} \sum_{k=1}^{N} W_1\!\left( \widehat{F}_k, F_k \right),
+    \qquad
+    W_1(F, G) = \int_{\R} \left| F(x) - G(x) \right| dx ,
+    \]
+    with $F_k$ and $\widehat{F}_k$ the empirical distribution functions of
+    asset $k$ in the true and imputed panel. $W_1$ measures the minimal
+    average displacement needed to transport one distribution onto the
+    other; it compares the marginals in full, in return units, and detects
+    shape distortions -- e.g.\ imputed values overly concentrated near zero
+    -- that moment-based metrics summarise away.
+
+    \item \textbf{Signature error}: the metrics above treat the dates as
+    exchangeable; this one does not. Reading the rows of the panel as the
+    increments of the log-price path $P_t = \sum_{s \le t} r_s$, we compare
+    the path signatures truncated at depth two
+    \citep{lyons1998, chevyrev2016}: level one is the total increment
+    $P_T \in \R^N$, level two the matrix of iterated sums
+    \[
+    S^{(2)}_{ij} = \sum_{t=1}^{T} P_{t-1,i} \, r_{t,j}
+    \;\approx\; \int P^i \, dP^j ,
+    \]
+    whose symmetric part carries second-moment information while its
+    antisymmetric part (the L\'evy area) records the \emph{order} in which
+    assets move relative to one another -- a genuinely pathwise quantity,
+    invisible to every other metric in this list. The reported error is the
+    mean relative error across the two levels.
+\end{enumerate}
+
+All seven metrics are computed by a single evaluation routine for every
+model, missingness pattern and missingness level; the resulting tables are
+collected and discussed in Chapter~\ref{ch:results}.
