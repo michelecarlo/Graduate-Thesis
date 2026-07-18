@@ -5,7 +5,8 @@ Each metric is a plain function ``metric(true, imp, mask=None) -> float`` where
 frames).  ``mask`` is an optional boolean ``(T, N)`` array that is ``True`` on
 the cells that were originally missing (and therefore imputed); the pointwise
 errors (MAE, RMSE) are restricted to those cells, while the structural metrics
-(covariance, volatility, VaR, Wasserstein, signature) compare the full panels.
+(covariance, VaR, Wasserstein, ACF of absolute returns, leverage effect)
+compare the full panels.
 
 The :class:`Evaluator` bundles a set of metrics and applies them in a
 "serialized" way -- across the several missingness levels (e.g. the keys of
@@ -23,8 +24,9 @@ import pandas as pd
 from scipy.stats import wasserstein_distance
 
 __all__ = [
-    "mae", "rmse", "cov_error", "vol_error", "var_error",
-    "wasserstein_error", "truncated_signature", "signature_error",
+    "mae", "rmse", "cov_error", "var_error", "wasserstein_error",
+    "acf", "leverage",
+    "acf_abs_error", "leverage_error",
     "Evaluator",
 ]
 
@@ -89,15 +91,6 @@ def cov_error(true, imp, mask=None):
     return float(np.linalg.norm(ci - ct) / (np.linalg.norm(ct) + 1e-12))
 
 
-def vol_error(true, imp, mask=None):
-    """Mean relative error of the per-asset volatility (standard deviation)."""
-    if _degenerate(true, imp):
-        return np.nan
-    vt = _arr(true).std(axis=0)
-    vi = _arr(imp).std(axis=0)
-    return float(np.mean(np.abs(vi - vt) / (np.abs(vt) + 1e-12)))
-
-
 # --------------------------------------------------------------------------- #
 # Tail risk
 # --------------------------------------------------------------------------- #
@@ -127,37 +120,50 @@ def wasserstein_error(true, imp, mask=None):
 
 
 # --------------------------------------------------------------------------- #
-# Path signature (truncated)
+# Temporal structure: volatility clustering and the leverage effect
 # --------------------------------------------------------------------------- #
-def truncated_signature(increments, depth=2):
-    """Truncated path signature of the cumulative path of ``increments``.
+def acf(x, nlags=20):
+    """Autocorrelation of the series ``x`` at lags ``1..nlags``."""
+    x = _arr(x).ravel()
+    x = x - x.mean()
+    denom = float(x @ x) + 1e-12
+    return np.array([float(x[:-k] @ x[k:]) / denom for k in range(1, nlags + 1)])
 
-    The panel rows are treated as the increments of a path (log-returns -> the
-    log-price path).  Returns the signature levels as a list of arrays:
-    level 1 is the total increment ``(N,)`` and level 2 the matrix of iterated
-    integrals ``int P^i dP^j`` ``(N, N)`` (captures cross-asset covariation).
-    Depth > 2 is impractical for a 50-asset path (it grows as ``N**depth``) and
-    would need a dedicated library (e.g. iisignature).
+
+def leverage(x, nlags=20):
+    """Leverage curve ``corr(r_t, |r_{t+k}|)`` at lags ``1..nlags``.
+
+    Negative values are the leverage effect: a negative return today raises
+    volatility over the following days.
     """
-    if depth > 2:
-        raise ValueError("truncated_signature supports depth <= 2 (use iisignature for more)")
-    dX = _arr(increments)
-    path = np.cumsum(dX, axis=0)                       # P_t, with P_0 = 0 implied
-    levels = [path[-1]]                                # level 1: total increment
-    if depth >= 2:
-        prev = np.vstack([np.zeros((1, dX.shape[1])), path[:-1]])  # P_{t-1}
-        levels.append(prev.T @ dX)                     # level 2: \int P dP
-    return levels
+    x = _arr(x).ravel()
+    a = np.abs(x)
+    xc, ac = x - x.mean(), a - a.mean()
+    scale = xc.std() * ac.std() + 1e-12
+    return np.array([
+        float(xc[:-k] @ ac[k:]) / ((len(x) - k) * scale) for k in range(1, nlags + 1)
+    ])
 
 
-def signature_error(true, imp, mask=None, depth=2):
-    """Mean per-level relative error of the truncated path signatures."""
-    if _degenerate(true, imp):
+def _curve_error(true, imp, curve, nlags):
+    """Mean absolute gap between per-asset ``curve``s of the two panels."""
+    true, imp = _arr(true), _arr(imp)
+    if min(true.shape[0], imp.shape[0]) < nlags + 2:
         return np.nan
-    st = truncated_signature(true, depth)
-    si = truncated_signature(imp, depth)
-    errs = [np.linalg.norm(b - a) / (np.linalg.norm(a) + 1e-12) for a, b in zip(st, si)]
-    return float(np.mean(errs))
+    return float(np.mean([
+        np.abs(curve(imp[:, j], nlags) - curve(true[:, j], nlags)).mean()
+        for j in range(true.shape[1])
+    ]))
+
+
+def acf_abs_error(true, imp, mask=None, nlags=20):
+    """Mean absolute error of the ACF of absolute returns (volatility clustering)."""
+    return _curve_error(true, imp, lambda x, n: acf(np.abs(x), n), nlags)
+
+
+def leverage_error(true, imp, mask=None, nlags=20):
+    """Mean absolute error of the leverage curve ``corr(r_t, |r_{t+k}|)``."""
+    return _curve_error(true, imp, leverage, nlags)
 
 
 # --------------------------------------------------------------------------- #
@@ -166,21 +172,21 @@ def signature_error(true, imp, mask=None, depth=2):
 class Evaluator:
     """Apply a set of metrics across many datasets and models.
 
-    Parameters mirror the metric knobs: ``var_level`` for the VaR tail and
-    ``sig_depth`` for the signature truncation.  ``metrics`` can be overridden
-    with any ``{name: function}`` mapping following the ``(true, imp, mask)``
-    signature.
+    ``var_level`` sets the VaR tail and ``nlags`` the horizon of the temporal
+    curves (ACF of absolute returns, leverage); ``metrics`` can be
+    overridden with any ``{name: function}`` mapping following the
+    ``(true, imp, mask)`` signature.
     """
 
-    def __init__(self, metrics=None, var_level=0.05, sig_depth=2):
+    def __init__(self, metrics=None, var_level=0.05, nlags=20):
         self.metrics = metrics or {
             "MAE":    mae,
             "RMSE":   rmse,
             "CovErr": cov_error,
-            "VolErr": vol_error,
             f"VaR{int(var_level * 100)}Err": lambda t, i, m: var_error(t, i, m, level=var_level),
             "WassErr": wasserstein_error,
-            "SigErr": lambda t, i, m: signature_error(t, i, m, depth=sig_depth),
+            "AbsACFErr":  lambda t, i, m: acf_abs_error(t, i, m, nlags=nlags),
+            "LevErr":     lambda t, i, m: leverage_error(t, i, m, nlags=nlags),
         }
 
     def evaluate(self, true, imp, mask=None):

@@ -1,0 +1,185 @@
+\chapter{Results and Discussion}
+\label{ch:results}
+
+Tables~\ref{tab:results_sparse}, \ref{tab:results_gaps}
+and~\ref{tab:results_stressed} report the seven evaluation metrics of
+Section~\ref{sec:eval} for every model, one table per injection pattern of
+Section~\ref{sec:missingness}, with the levels ordered by their realised
+share of missing cells. Within each level, the best value of every metric is
+set in bold. A dash marks a value that is not defined: the pointwise errors
+of Deletion (the returned panel changes shape), its remaining metrics at the
+heaviest levels (too few complete dates survive), and KNN at the most
+extreme stressed level, where the dates to be filled lack well-observed
+donors altogether.
+
+Three regularities stand out. First, the hierarchy is stable across
+patterns and levels: the conditional methods dominate the two baselines
+everywhere, EM is rarely beaten -- and never by much -- while the neural
+models match it at a far higher computational cost rather than surpassing
+it (BRITS even stumbles at two stressed levels). Second, pointwise and
+structural quality diverge exactly as anticipated in
+Section~\ref{sec:eval}: under the MCAR patterns mean replacement stays
+within roughly fifty per cent of the best MAE while its covariance error is
+close to an order of magnitude worse than EM's. Third, MNAR is the
+genuinely hostile regime: at the heaviest stressed level no method brings
+the relative covariance error below $0.6$ -- the turbulent dates are simply
+no longer in the data, and no choice of model recovers them.
+
+\begin{table}[p]
+  \centering
+  \footnotesize
+  \caption{Evaluation scores under sparse missingness (MCAR); levels are the deletion rate $r$.}
+  \label{tab:results_sparse}
+  \begin{tabular}{llrrrrrrr}
+    \toprule
+    Level & Model & MAE & RMSE & CovErr & VaRErr & WassErr & AbsACFErr & LevErr \\
+    \midrule
+    $0.001$ & Deletion & -- & -- & 0.0119 & 0.0001 & 0.0001 & 0.0101 & 0.0114 \\
+     & Zero & 0.0118 & 0.0194 & 0.0026 & \textbf{0.0000} & \textbf{0.0000} & 0.0009 & 0.0008 \\
+     & KNN & 0.0099 & 0.0168 & 0.0018 & \textbf{0.0000} & \textbf{0.0000} & 0.0006 & 0.0005 \\
+     & LowRank & 0.0084 & 0.0152 & 0.0016 & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0005} & \textbf{0.0004} \\
+     & EM & \textbf{0.0080} & \textbf{0.0147} & \textbf{0.0015} & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0005} & \textbf{0.0004} \\
+     & BRITS & 0.0091 & 0.0158 & 0.0016 & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0005} & \textbf{0.0004} \\
+     & CSDI & 0.0081 & 0.0151 & 0.0016 & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0005} & \textbf{0.0004} \\
+    \midrule
+    $0.01$ & Deletion & -- & -- & 0.0532 & 0.0005 & 0.0004 & 0.0247 & 0.0334 \\
+     & Zero & 0.0107 & 0.0161 & 0.0205 & 0.0001 & 0.0001 & 0.0035 & 0.0027 \\
+     & KNN & 0.0081 & 0.0123 & 0.0069 & 0.0001 & \textbf{0.0000} & 0.0019 & 0.0017 \\
+     & LowRank & 0.0077 & 0.0117 & 0.0054 & \textbf{0.0000} & \textbf{0.0000} & 0.0016 & 0.0015 \\
+     & EM & 0.0071 & 0.0109 & 0.0051 & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0015} & \textbf{0.0014} \\
+     & BRITS & 0.0076 & 0.0116 & 0.0064 & 0.0001 & \textbf{0.0000} & 0.0017 & 0.0016 \\
+     & CSDI & \textbf{0.0069} & \textbf{0.0107} & \textbf{0.0050} & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0015} & \textbf{0.0014} \\
+    \midrule
+    $0.05$ & Deletion & -- & -- & 0.1951 & 0.0019 & 0.0012 & 0.1334 & 0.0515 \\
+     & Zero & 0.0111 & 0.0167 & 0.1044 & 0.0005 & 0.0006 & 0.0132 & 0.0073 \\
+     & KNN & 0.0084 & 0.0127 & 0.0283 & 0.0003 & 0.0002 & 0.0047 & 0.0045 \\
+     & LowRank & 0.0078 & 0.0118 & 0.0169 & \textbf{0.0002} & \textbf{0.0001} & 0.0045 & 0.0041 \\
+     & EM & \textbf{0.0072} & 0.0113 & 0.0151 & \textbf{0.0002} & 0.0002 & 0.0044 & \textbf{0.0039} \\
+     & BRITS & 0.0073 & 0.0113 & \textbf{0.0145} & \textbf{0.0002} & 0.0002 & \textbf{0.0043} & 0.0040 \\
+     & CSDI & \textbf{0.0072} & \textbf{0.0112} & 0.0149 & \textbf{0.0002} & 0.0002 & 0.0051 & 0.0041 \\
+    \midrule
+    $0.1$ & Deletion & -- & -- & 0.4492 & 0.0091 & 0.0051 & -- & -- \\
+     & Zero & 0.0109 & 0.0163 & 0.1872 & 0.0011 & 0.0011 & 0.0276 & 0.0111 \\
+     & KNN & 0.0083 & 0.0125 & 0.0487 & 0.0007 & 0.0004 & 0.0090 & 0.0067 \\
+     & LowRank & 0.0077 & 0.0116 & 0.0282 & \textbf{0.0004} & \textbf{0.0003} & 0.0072 & 0.0058 \\
+     & EM & \textbf{0.0071} & \textbf{0.0110} & \textbf{0.0237} & 0.0005 & \textbf{0.0003} & \textbf{0.0068} & \textbf{0.0056} \\
+     & BRITS & 0.0072 & 0.0111 & 0.0238 & 0.0005 & \textbf{0.0003} & \textbf{0.0068} & 0.0057 \\
+     & CSDI & 0.0072 & 0.0111 & 0.0261 & \textbf{0.0004} & \textbf{0.0003} & 0.0077 & 0.0057 \\
+    \midrule
+    $0.3$ & Deletion & -- & -- & -- & -- & -- & -- & -- \\
+     & Zero & 0.0109 & 0.0161 & 0.4749 & 0.0037 & 0.0033 & 0.0638 & 0.0201 \\
+     & KNN & 0.0087 & 0.0129 & 0.1467 & 0.0024 & 0.0014 & 0.0173 & 0.0118 \\
+     & LowRank & 0.0080 & 0.0119 & 0.0749 & \textbf{0.0014} & \textbf{0.0007} & 0.0170 & 0.0105 \\
+     & EM & \textbf{0.0074} & \textbf{0.0112} & 0.0565 & 0.0017 & 0.0009 & 0.0150 & \textbf{0.0099} \\
+     & BRITS & 0.0076 & 0.0114 & \textbf{0.0536} & 0.0015 & 0.0008 & \textbf{0.0149} & 0.0101 \\
+     & CSDI & \textbf{0.0074} & 0.0113 & 0.0641 & \textbf{0.0014} & 0.0008 & 0.0203 & 0.0112 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[p]
+  \centering
+  \footnotesize
+  \caption{Evaluation scores under contiguous-gap missingness (MCAR); levels are the parameters $(n, \lambda)$ of Section~\ref{sec:missingness}.}
+  \label{tab:results_gaps}
+  \begin{tabular}{llrrrrrrr}
+    \toprule
+    Level & Model & MAE & RMSE & CovErr & VaRErr & WassErr & AbsACFErr & LevErr \\
+    \midrule
+    $(20,\, 10)$ & Deletion & -- & -- & 0.0103 & 0.0001 & 0.0001 & 0.0033 & 0.0033 \\
+     & Zero & 0.0121 & 0.0184 & 0.0027 & \textbf{0.0000} & \textbf{0.0000} & 0.0003 & 0.0002 \\
+     & KNN & 0.0096 & 0.0144 & 0.0016 & \textbf{0.0000} & \textbf{0.0000} & 0.0002 & \textbf{0.0001} \\
+     & LowRank & 0.0087 & 0.0123 & 0.0010 & \textbf{0.0000} & \textbf{0.0000} & 0.0002 & \textbf{0.0001} \\
+     & EM & 0.0079 & 0.0117 & 0.0011 & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0001} & \textbf{0.0001} \\
+     & BRITS & \textbf{0.0078} & \textbf{0.0112} & 0.0010 & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0001} & \textbf{0.0001} \\
+     & CSDI & 0.0079 & 0.0115 & \textbf{0.0009} & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0001} & \textbf{0.0001} \\
+    \midrule
+    $(200,\, 10)$ & Deletion & -- & -- & 0.1492 & 0.0010 & 0.0004 & 0.0243 & 0.0158 \\
+     & Zero & 0.0107 & 0.0156 & 0.0222 & \textbf{0.0001} & 0.0001 & 0.0037 & 0.0015 \\
+     & KNN & 0.0082 & 0.0121 & 0.0065 & \textbf{0.0001} & \textbf{0.0000} & 0.0016 & 0.0012 \\
+     & LowRank & 0.0078 & 0.0118 & 0.0061 & \textbf{0.0001} & \textbf{0.0000} & 0.0015 & 0.0012 \\
+     & EM & \textbf{0.0072} & \textbf{0.0109} & \textbf{0.0046} & \textbf{0.0001} & \textbf{0.0000} & \textbf{0.0014} & \textbf{0.0011} \\
+     & BRITS & 0.0073 & 0.0111 & 0.0049 & \textbf{0.0001} & \textbf{0.0000} & 0.0015 & \textbf{0.0011} \\
+     & CSDI & \textbf{0.0072} & \textbf{0.0109} & 0.0049 & \textbf{0.0001} & \textbf{0.0000} & 0.0015 & \textbf{0.0011} \\
+    \midrule
+    $(1000,\, 10)$ & Deletion & -- & -- & 0.1825 & 0.0017 & 0.0010 & 0.1135 & 0.0493 \\
+     & Zero & 0.0104 & 0.0152 & 0.0785 & 0.0004 & 0.0005 & 0.0155 & 0.0048 \\
+     & KNN & 0.0080 & 0.0118 & 0.0224 & 0.0003 & 0.0002 & 0.0059 & 0.0032 \\
+     & LowRank & 0.0074 & 0.0108 & 0.0137 & \textbf{0.0002} & \textbf{0.0001} & \textbf{0.0048} & 0.0029 \\
+     & EM & \textbf{0.0069} & \textbf{0.0103} & 0.0116 & \textbf{0.0002} & \textbf{0.0001} & 0.0049 & 0.0028 \\
+     & BRITS & 0.0070 & 0.0104 & 0.0116 & \textbf{0.0002} & \textbf{0.0001} & 0.0049 & 0.0028 \\
+     & CSDI & \textbf{0.0069} & \textbf{0.0103} & \textbf{0.0114} & \textbf{0.0002} & \textbf{0.0001} & 0.0051 & \textbf{0.0027} \\
+    \midrule
+    $(1000,\, 20)$ & Deletion & -- & -- & 0.8524 & 0.0087 & 0.0042 & 0.1872 & 0.1681 \\
+     & Zero & 0.0110 & 0.0163 & 0.1716 & 0.0010 & 0.0010 & 0.0354 & 0.0068 \\
+     & KNN & 0.0085 & 0.0127 & 0.0487 & 0.0007 & 0.0004 & 0.0117 & 0.0049 \\
+     & LowRank & 0.0078 & 0.0119 & 0.0310 & \textbf{0.0004} & \textbf{0.0003} & 0.0088 & 0.0046 \\
+     & EM & \textbf{0.0073} & \textbf{0.0114} & \textbf{0.0238} & 0.0005 & \textbf{0.0003} & 0.0083 & \textbf{0.0044} \\
+     & BRITS & 0.0074 & \textbf{0.0114} & 0.0241 & 0.0005 & \textbf{0.0003} & \textbf{0.0082} & 0.0045 \\
+     & CSDI & \textbf{0.0073} & 0.0115 & 0.0328 & \textbf{0.0004} & \textbf{0.0003} & 0.0095 & \textbf{0.0044} \\
+    \midrule
+    $(2000,\, 30)$ & Deletion & -- & -- & 1.4799 & 0.0104 & 0.0100 & -- & -- \\
+     & Zero & 0.0108 & 0.0161 & 0.4324 & 0.0028 & 0.0027 & 0.0908 & 0.0143 \\
+     & KNN & 0.0085 & 0.0128 & 0.1378 & 0.0018 & 0.0011 & 0.0277 & 0.0090 \\
+     & LowRank & 0.0080 & 0.0120 & 0.0820 & \textbf{0.0010} & \textbf{0.0006} & 0.0218 & 0.0083 \\
+     & EM & \textbf{0.0073} & \textbf{0.0113} & 0.0589 & 0.0012 & 0.0007 & 0.0212 & \textbf{0.0079} \\
+     & BRITS & 0.0074 & 0.0114 & \textbf{0.0555} & 0.0011 & \textbf{0.0006} & \textbf{0.0187} & 0.0082 \\
+     & CSDI & 0.0074 & 0.0115 & 0.0896 & \textbf{0.0010} & 0.0007 & 0.0265 & 0.0091 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[p]
+  \centering
+  \footnotesize
+  \caption{Evaluation scores under stressed missingness (MNAR); levels are the parameters $(r, h, p)$ of Section~\ref{sec:missingness}.}
+  \label{tab:results_stressed}
+  \begin{tabular}{llrrrrrrr}
+    \toprule
+    Level & Model & MAE & RMSE & CovErr & VaRErr & WassErr & AbsACFErr & LevErr \\
+    \midrule
+    $(0,\, 0.1,\, 0.99)$ & Deletion & -- & -- & 0.2813 & 0.0009 & 0.0004 & 0.0582 & 0.0200 \\
+     & Zero & 0.0552 & 0.0640 & 0.0676 & 0.0001 & 0.0001 & 0.0115 & 0.0070 \\
+     & KNN & 0.0202 & 0.0285 & 0.0229 & \textbf{0.0000} & \textbf{0.0000} & 0.0034 & 0.0029 \\
+     & LowRank & 0.0158 & 0.0220 & 0.0116 & \textbf{0.0000} & \textbf{0.0000} & 0.0025 & 0.0020 \\
+     & EM & \textbf{0.0133} & \textbf{0.0187} & \textbf{0.0094} & \textbf{0.0000} & \textbf{0.0000} & \textbf{0.0021} & \textbf{0.0017} \\
+     & BRITS & 0.0301 & 0.0385 & 0.0253 & \textbf{0.0000} & \textbf{0.0000} & 0.0046 & 0.0036 \\
+     & CSDI & 0.0163 & 0.0226 & 0.0175 & \textbf{0.0000} & \textbf{0.0000} & 0.0027 & 0.0022 \\
+    \midrule
+    $(0.005,\, 0.5,\, 0.99)$ & Deletion & -- & -- & 0.2960 & 0.0010 & 0.0005 & 0.0687 & 0.0268 \\
+     & Zero & 0.0321 & 0.0463 & 0.2238 & 0.0005 & 0.0003 & 0.0483 & 0.0172 \\
+     & KNN & 0.0161 & 0.0261 & 0.0991 & 0.0001 & \textbf{0.0001} & 0.0168 & 0.0095 \\
+     & LowRank & 0.0129 & 0.0200 & \textbf{0.0279} & \textbf{0.0000} & \textbf{0.0001} & 0.0078 & 0.0067 \\
+     & EM & \textbf{0.0118} & \textbf{0.0189} & 0.0319 & \textbf{0.0000} & \textbf{0.0001} & \textbf{0.0077} & \textbf{0.0065} \\
+     & BRITS & 0.0122 & 0.0197 & 0.0401 & \textbf{0.0000} & \textbf{0.0001} & 0.0082 & 0.0069 \\
+     & CSDI & 0.0136 & 0.0233 & 0.0751 & \textbf{0.0000} & \textbf{0.0001} & 0.0132 & 0.0087 \\
+    \midrule
+    $(0.04,\, 0.2,\, 0.95)$ & Deletion & -- & -- & 0.5325 & 0.0043 & 0.0018 & 0.1079 & 0.0491 \\
+     & Zero & 0.0143 & 0.0219 & 0.2254 & 0.0010 & 0.0007 & 0.0375 & 0.0143 \\
+     & KNN & 0.0092 & 0.0141 & 0.0562 & 0.0003 & 0.0002 & 0.0092 & 0.0067 \\
+     & LowRank & 0.0083 & 0.0125 & 0.0253 & \textbf{0.0002} & \textbf{0.0001} & 0.0068 & 0.0052 \\
+     & EM & \textbf{0.0077} & \textbf{0.0117} & \textbf{0.0217} & \textbf{0.0002} & \textbf{0.0001} & \textbf{0.0062} & \textbf{0.0048} \\
+     & BRITS & 0.0078 & 0.0118 & 0.0231 & \textbf{0.0002} & \textbf{0.0001} & 0.0064 & 0.0049 \\
+     & CSDI & 0.0078 & 0.0122 & 0.0374 & \textbf{0.0002} & \textbf{0.0001} & 0.0078 & 0.0061 \\
+    \midrule
+    $(0.05,\, 0.5,\, 0.9)$ & Deletion & -- & -- & 0.6318 & 0.0056 & 0.0023 & 0.1230 & 0.0630 \\
+     & Zero & 0.0174 & 0.0249 & 0.5125 & 0.0030 & 0.0017 & 0.0843 & 0.0244 \\
+     & KNN & 0.0103 & 0.0161 & 0.1602 & 0.0010 & 0.0004 & 0.0258 & 0.0124 \\
+     & LowRank & 0.0091 & 0.0139 & \textbf{0.0483} & \textbf{0.0004} & \textbf{0.0002} & 0.0110 & 0.0091 \\
+     & EM & \textbf{0.0084} & \textbf{0.0130} & 0.0554 & 0.0008 & 0.0003 & \textbf{0.0107} & \textbf{0.0087} \\
+     & BRITS & 0.0106 & 0.0162 & 0.2083 & 0.0015 & 0.0006 & 0.0256 & 0.0126 \\
+     & CSDI & 0.0086 & 0.0137 & 0.0542 & 0.0008 & 0.0003 & 0.0165 & 0.0109 \\
+    \midrule
+    $(0.2,\, 1,\, 0.9)$ & Deletion & -- & -- & -- & -- & -- & -- & -- \\
+     & Zero & 0.0149 & 0.0219 & 0.7677 & 0.0070 & 0.0042 & 0.1201 & 0.0333 \\
+     & KNN & -- & -- & -- & -- & -- & -- & -- \\
+     & LowRank & 0.0137 & 0.0212 & 0.6525 & \textbf{0.0062} & 0.0029 & 0.1111 & 0.0316 \\
+     & EM & \textbf{0.0134} & \textbf{0.0210} & 0.6634 & 0.0065 & 0.0031 & 0.1112 & 0.0315 \\
+     & BRITS & 0.0136 & 0.0214 & \textbf{0.6480} & 0.0063 & \textbf{0.0025} & 0.1069 & 0.0299 \\
+     & CSDI & \textbf{0.0134} & \textbf{0.0210} & 0.6559 & 0.0064 & 0.0028 & \textbf{0.1065} & \textbf{0.0298} \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\section{Computational costs}
+

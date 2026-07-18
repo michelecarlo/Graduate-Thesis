@@ -242,8 +242,8 @@ metrics. \emph{Pointwise} metrics are computed on the imputed cells alone
 them would only dilute the error -- and measure how close each filled value
 is to the deleted one. \emph{Structural} metrics instead compare statistics
 computed from the two full panels, and measure whether the objects that
-downstream models actually consume (covariances, volatilities, tail
-quantiles, path functionals) survive the imputation. The two families need
+downstream models actually consume (covariances, tail quantiles, marginal
+distributions, temporal dependence) survive the imputation. The two families need
 not agree: a method can be nearly optimal pointwise and still destroy the
 second-moment structure, as mean replacement shows. Deletion is the
 exception in what follows: it returns a panel with fewer rows, so the
@@ -284,18 +284,6 @@ computed on the surviving subsample.
     (Section~\ref{geometry}) we set out to preserve, and the input of
     essentially every allocation and risk model built downstream.
 
-    \item \textbf{Volatility error}: the mean relative error of the
-    per-asset sample volatilities,
-    \[
-    \mathrm{VolErr}
-    = \frac{1}{N} \sum_{k=1}^{N}
-      \frac{\left| \hat{\sigma}_k - \sigma_k \right|}{\sigma_k} .
-    \]
-    It isolates the diagonal of $\bSigma$, so that a moderate CovErr cannot
-    conceal a systematic damping of the variances -- the failure mode, scaling
-    as $\sqrt{1-r}$, identified for mean replacement in
-    Section~\ref{sec:models}.
-
     \item \textbf{Value-at-Risk error}: for each asset the empirical VaR at
     level $\alpha = 0.05$ is the (sign-flipped) empirical $\alpha$-quantile
     of its return series, $\mathrm{VaR}_\alpha(k) = -\hat{q}_\alpha(R_k)$,
@@ -324,21 +312,38 @@ computed on the surviving subsample.
     shape distortions -- e.g.\ imputed values overly concentrated near zero
     -- that moment-based metrics summarise away.
 
-    \item \textbf{Signature error}: the metrics above treat the dates as
-    exchangeable; this one does not. Reading the rows of the panel as the
-    increments of the log-price path $P_t = \sum_{s \le t} r_s$, we compare
-    the path signatures truncated at depth two
-    \citep{lyons1998, chevyrev2016}: level one is the total increment
-    $P_T \in \R^N$, level two the matrix of iterated sums
+    \item \textbf{Absolute-return ACF error}: every metric above is
+    invariant to a permutation of the dates; the last two are not. Daily
+    returns are themselves close to serially uncorrelated, but their
+    absolute values are persistently and positively autocorrelated --
+    volatility clustering, the most robust temporal stylized fact of asset
+    returns \citep{cont2001}. Writing $\hat{\rho}_k(\cdot)$ for the sample
+    autocorrelation at lag $k$, we compare the autocorrelation functions of
+    the absolute returns up to a horizon $K$,
     \[
-    S^{(2)}_{ij} = \sum_{t=1}^{T} P_{t-1,i} \, r_{t,j}
-    \;\approx\; \int P^i \, dP^j ,
+    \mathrm{AbsACFErr}
+    = \frac{1}{NK} \sum_{j=1}^{N} \sum_{k=1}^{K}
+      \left| \hat{\rho}_k\!\left(|\widehat{R}_j|\right)
+           - \hat{\rho}_k\!\left(|R_j|\right) \right| ,
     \]
-    whose symmetric part carries second-moment information while its
-    antisymmetric part (the L\'evy area) records the \emph{order} in which
-    assets move relative to one another -- a genuinely pathwise quantity,
-    invisible to every other metric in this list. The reported error is the
-    mean relative error across the two levels.
+    with $K = 20$ throughout. An imputer that fills the panel with values
+    that are individually plausible but temporally independent -- as any
+    model that treats the dates as exchangeable must -- erases this
+    dependence and is caught here and nowhere above.
+
+    \item \textbf{Leverage error}: negative returns raise subsequent
+    volatility more than positive ones of the same size, the leverage
+    effect \citep{black1976}: the cross-correlation curve
+    \[
+    L_k = \mathrm{corr}\!\left( r_{t}, |r_{t+k}| \right),
+    \qquad k = 1, \dots, K ,
+    \]
+    is negative at short lags. We report the mean absolute gap between the
+    true and imputed curves, averaged over assets and lags as above. Unlike
+    the previous metric, which is blind to sign, this one probes an
+    \emph{asymmetric} dependence between the level of a return and the
+    volatility that follows it, and thereby whether the imputed panel still
+    distinguishes falling from rising markets.
 \end{enumerate}
 
 All seven metrics are computed by a single evaluation routine for every
