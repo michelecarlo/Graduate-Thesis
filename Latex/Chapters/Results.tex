@@ -4,26 +4,29 @@
 Tables~\ref{tab:results_sparse}, \ref{tab:results_gaps}
 and~\ref{tab:results_stressed} report the seven evaluation metrics of
 Section~\ref{sec:eval} for every model, one table per injection pattern of
-Section~\ref{sec:missingness}, with the levels ordered by their realised
-share of missing cells. Within each level, the best value of every metric is
-set in bold. A dash marks a value that is not defined: the pointwise errors
-of Deletion (the returned panel changes shape), its remaining metrics at the
-heaviest levels (too few complete dates survive), and KNN at the most
-extreme stressed level, where the dates to be filled lack well-observed
-donors altogether.
+Section~\ref{sec:missingness}. Within each table the levels are ordered by
+their realized share of missing cells, and within each level the best value
+of every metric is set in bold. A dash marks a value that is not defined.
+This happens for the pointwise errors of Deletion, since the panel it
+returns changes shape, for its remaining metrics at the heaviest levels,
+where too few complete dates survive, and for KNN at the most extreme
+stressed level, where the dates to be filled have no well-observed donors
+left.
 
-Three regularities stand out. First, the hierarchy is stable across
-patterns and levels: the conditional methods dominate the two baselines
-everywhere, EM is rarely beaten -- and never by much -- while the neural
-models match it at a far higher computational cost rather than surpassing
-it (BRITS even stumbles at two stressed levels). Second, pointwise and
-structural quality diverge exactly as anticipated in
-Section~\ref{sec:eval}: under the MCAR patterns mean replacement stays
-within roughly fifty per cent of the best MAE while its covariance error is
-close to an order of magnitude worse than EM's. Third, MNAR is the
-genuinely hostile regime: at the heaviest stressed level no method brings
-the relative covariance error below $0.6$ -- the turbulent dates are simply
-no longer in the data, and no choice of model recovers them.
+The ranking of the models is stable across patterns and levels. The
+conditional methods dominate the two baselines everywhere, EM is rarely
+beaten and never by a wide margin, and the neural models match it at a much
+higher computational cost rather than improving on it; BRITS falls clearly
+behind at two of the stressed levels. The tables also confirm the
+distinction of Section~\ref{sec:eval} between pointwise and structural
+quality: under the MCAR patterns the MAE of zero imputation is only about
+fifty percent larger than the best one, while its covariance error is close
+to an order of magnitude worse than that of EM, so a model can look
+acceptable entry by entry and still distort the geometry of the panel. The
+stressed pattern, finally, shows how much harder MNAR is. At the heaviest
+level no method brings the relative covariance error below $0.6$; the
+turbulent dates are simply no longer in the data, and nothing in the
+observed sample allows any model to recover them.
 
 \begin{table}[p]
   \centering
@@ -132,6 +135,7 @@ no longer in the data, and no choice of model recovers them.
 \begin{table}[p]
   \centering
   \footnotesize
+  \setlength{\tabcolsep}{4.5pt}
   \caption{Evaluation scores under stressed missingness (MNAR); levels are the parameters $(r, h, p)$ of Section~\ref{sec:missingness}.}
   \label{tab:results_stressed}
   \begin{tabular}{llrrrrrrr}
@@ -182,4 +186,35 @@ no longer in the data, and no choice of model recovers them.
 \end{table}
 
 \section{Computational costs}
+
+The scores above say nothing about what each model costs to produce, so we
+close the chapter with the computational side of the experiments.
+Everything in this thesis, training included, was run on a single consumer
+machine, an Apple Mac mini with the M4 chip (four performance and six
+efficiency cores) and 16\,GB of unified memory. The neural models run on
+the CPU build of PyTorch, so no GPU acceleration is involved. Both
+networks are deliberately small, with roughly $1.2 \times 10^{5}$
+trainable parameters for BRITS and $4.7 \times 10^{4}$ for CSDI, which
+means that the costs reported here come from the algorithms themselves and
+not from the size of the models.
+
+The classical methods have no training stage and a negligible running
+time: the whole family fills a $4125 \times 50$ panel in a few seconds,
+and EM, the most expensive of the group with its fifty covariance sweeps,
+needs about one second. The neural models are on another scale. Training
+on a single corrupted panel took just under an hour for BRITS ($10^{4}$
+epochs) and just under four hours for CSDI ($2\,000$ epochs), so covering
+the fifteen levels of Section~\ref{sec:missingness} required roughly
+seventy hours of computation, four fifths of which were spent on CSDI.
+CSDI is by far the most expensive model at imputation time as well. BRITS
+fills the panel with a single forward pass in a fraction of a second,
+while a CSDI imputation is the median of $32$ stochastic draws, each of
+which runs the full $50$-step reverse diffusion over every window of the
+panel. This takes roughly twenty-four minutes per panel, and the
+evaluation sweep behind Tables~\ref{tab:results_sparse},
+\ref{tab:results_gaps} and~\ref{tab:results_stressed} ran for about six
+hours, almost all of them spent sampling from CSDI. In view of the tables
+above, this cost buys very little: EM reaches the same quality for about
+one second per panel, four orders of magnitude less than CSDI, which
+rarely beats it.
 
