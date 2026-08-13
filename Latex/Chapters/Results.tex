@@ -185,6 +185,479 @@ observed sample allows any model to recover them.
   \end{tabular}
 \end{table}
 
+\section{Downstream evaluation: the optimal portfolio}
+\label{sec:results_portfolio}
+
+We now turn to the downstream evaluation of Section~\ref{sec:portfolio}. For
+every imputed panel, and for the uncorrupted one, we estimate the tangency
+portfolio and realise it on the true returns. Tables~\ref{tab:portfolio_sparses},
+\ref{tab:portfolio_gaps} and~\ref{tab:portfolio_stressed} report its annualised
+mean, variance and Sharpe ratio, together with the gross distance
+$\lVert \Delta w \rVert_1$ between the estimated weights and the oracle's. The
+oracle is the same in every row, with an annualised mean of $0.361$, a variance
+of $0.049$ and a Sharpe ratio of $1.636$. Since it is the best in-sample
+allocation, no imputation can beat its Sharpe, and the only question is how close
+each one comes. The two naive baselines are kept out of the tables and discussed
+at the end, so that the comparison stays among the imputation methods themselves.
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Optimal-portfolio evaluation under sparse missingness. Realised annualised mean, variance and Sharpe ratio of the tangency portfolio estimated from each panel, together with $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data.}
+  \label{tab:portfolio_sparses}
+  \begin{tabular}{llrrrr}
+    \toprule
+    Level & Model & Mean & Variance & Sharpe & $\lVert \Delta w\rVert_1$ \\
+    \midrule
+    $0.001$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.362 & 0.0491 & 1.635 & 0.30 \\
+     & LowRank & 0.362 & 0.0490 & 1.635 & 0.29 \\
+     & EM & 0.362 & 0.0491 & 1.634 & 0.30 \\
+     & BRITS & 0.362 & 0.0492 & 1.634 & 0.33 \\
+     & CSDI & 0.362 & 0.0489 & \textbf{1.635} & 0.30 \\
+    \midrule
+    $0.01$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.358 & 0.0486 & 1.623 & 1.11 \\
+     & LowRank & 0.360 & 0.0492 & 1.624 & 1.08 \\
+     & EM & 0.361 & 0.0493 & 1.625 & 1.03 \\
+     & BRITS & 0.359 & 0.0487 & 1.625 & 0.94 \\
+     & CSDI & 0.361 & 0.0492 & \textbf{1.626} & 1.02 \\
+    \midrule
+    $0.05$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.373 & 0.0564 & 1.569 & 2.92 \\
+     & LowRank & 0.391 & 0.0625 & 1.565 & 3.01 \\
+     & EM & 0.391 & 0.0623 & 1.567 & 3.06 \\
+     & BRITS & 0.384 & 0.0597 & 1.572 & 2.81 \\
+     & CSDI & 0.396 & 0.0627 & \textbf{1.580} & 2.89 \\
+    \midrule
+    $0.1$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.351 & 0.0554 & 1.490 & 4.07 \\
+     & LowRank & 0.375 & 0.0603 & 1.529 & 3.33 \\
+     & EM & 0.377 & 0.0607 & 1.531 & 3.40 \\
+     & BRITS & 0.371 & 0.0577 & \textbf{1.542} & 3.10 \\
+     & CSDI & 0.373 & 0.0597 & 1.527 & 3.03 \\
+    \midrule
+    $0.3$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.422 & 0.1086 & \textbf{1.279} & 8.43 \\
+     & LowRank & 0.556 & 0.1970 & 1.253 & 12.21 \\
+     & EM & 0.581 & 0.2130 & 1.259 & 13.76 \\
+     & BRITS & 0.528 & 0.1852 & 1.226 & 12.61 \\
+     & CSDI & 0.531 & 0.1723 & 1.279 & 11.33 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Optimal-portfolio evaluation under contiguous-gap missingness. Realised annualised mean, variance and Sharpe ratio of the tangency portfolio estimated from each panel, together with $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data.}
+  \label{tab:portfolio_gaps}
+  \begin{tabular}{llrrrr}
+    \toprule
+    Level & Model & Mean & Variance & Sharpe & $\lVert \Delta w\rVert_1$ \\
+    \midrule
+    $(20,\, 10)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.363 & 0.0492 & 1.635 & 0.16 \\
+     & LowRank & 0.362 & 0.0491 & 1.635 & 0.11 \\
+     & EM & 0.362 & 0.0491 & 1.635 & 0.10 \\
+     & BRITS & 0.362 & 0.0490 & \textbf{1.635} & 0.10 \\
+     & CSDI & 0.362 & 0.0489 & 1.635 & 0.11 \\
+    \midrule
+    $(200,\, 10)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.363 & 0.0497 & 1.627 & 0.87 \\
+     & LowRank & 0.365 & 0.0503 & 1.627 & 0.84 \\
+     & EM & 0.363 & 0.0499 & 1.628 & 0.84 \\
+     & BRITS & 0.362 & 0.0494 & \textbf{1.629} & 0.73 \\
+     & CSDI & 0.364 & 0.0499 & 1.628 & 0.79 \\
+    \midrule
+    $(1000,\, 10)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.372 & 0.0557 & 1.575 & 2.24 \\
+     & LowRank & 0.369 & 0.0537 & 1.593 & 1.91 \\
+     & EM & 0.371 & 0.0539 & \textbf{1.596} & 1.77 \\
+     & BRITS & 0.369 & 0.0540 & 1.588 & 1.99 \\
+     & CSDI & 0.374 & 0.0555 & 1.589 & 1.97 \\
+    \midrule
+    $(1000,\, 20)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.380 & 0.0644 & 1.500 & 4.31 \\
+     & LowRank & 0.386 & 0.0612 & \textbf{1.560} & 3.14 \\
+     & EM & 0.379 & 0.0598 & 1.549 & 3.40 \\
+     & BRITS & 0.358 & 0.0529 & 1.555 & 3.20 \\
+     & CSDI & 0.381 & 0.0611 & 1.542 & 3.52 \\
+    \midrule
+    $(2000,\, 30)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.329 & 0.0767 & 1.186 & 6.52 \\
+     & LowRank & 0.465 & 0.1439 & 1.225 & 9.14 \\
+     & EM & 0.478 & 0.1460 & 1.250 & 10.17 \\
+     & BRITS & 0.423 & 0.1098 & \textbf{1.276} & 7.50 \\
+     & CSDI & 0.643 & 0.2937 & 1.186 & 14.48 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Optimal-portfolio evaluation under stressed missingness. Realised annualised mean, variance and Sharpe ratio of the tangency portfolio estimated from each panel, together with $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data.}
+  \label{tab:portfolio_stressed}
+  \begin{tabular}{llrrrr}
+    \toprule
+    Level & Model & Mean & Variance & Sharpe & $\lVert \Delta w\rVert_1$ \\
+    \midrule
+    $(0,\, 0.1,\, 0.99)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.347 & 0.0459 & 1.619 & 1.13 \\
+     & LowRank & 0.356 & 0.0477 & 1.629 & 0.76 \\
+     & EM & 0.356 & 0.0478 & \textbf{1.631} & 0.60 \\
+     & BRITS & 0.345 & 0.0452 & 1.620 & 1.20 \\
+     & CSDI & 0.360 & 0.0487 & 1.630 & 0.66 \\
+    \midrule
+    $(0.005,\, 0.5,\, 0.99)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.328 & 0.0439 & 1.565 & 2.50 \\
+     & LowRank & 0.353 & 0.0483 & 1.606 & 1.58 \\
+     & EM & 0.353 & 0.0480 & \textbf{1.612} & 1.44 \\
+     & BRITS & 0.349 & 0.0476 & 1.602 & 1.78 \\
+     & CSDI & 0.375 & 0.0572 & 1.566 & 2.91 \\
+    \midrule
+    $(0.04,\, 0.2,\, 0.95)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.359 & 0.0543 & 1.542 & 3.16 \\
+     & LowRank & 0.365 & 0.0529 & 1.586 & 2.09 \\
+     & EM & 0.370 & 0.0545 & 1.587 & 2.00 \\
+     & BRITS & 0.369 & 0.0536 & \textbf{1.593} & 1.91 \\
+     & CSDI & 0.392 & 0.0615 & 1.580 & 2.62 \\
+    \midrule
+    $(0.05,\, 0.5,\, 0.9)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & 0.346 & 0.0597 & 1.418 & 4.64 \\
+     & LowRank & 0.359 & 0.0576 & 1.494 & 3.50 \\
+     & EM & 0.359 & 0.0568 & 1.506 & 3.45 \\
+     & BRITS & 0.243 & 0.0347 & 1.304 & 4.49 \\
+     & CSDI & 0.354 & 0.0551 & \textbf{1.508} & 3.50 \\
+    \midrule
+    $(0.2,\, 1,\, 0.9)$ & True (oracle) & 0.361 & 0.0488 & 1.636 & -- \\
+     & KNN & -- & -- & -- & -- \\
+     & LowRank & 0.191 & 0.0255 & 1.195 & 5.30 \\
+     & EM & 0.189 & 0.0245 & 1.207 & 5.22 \\
+     & BRITS & 0.193 & 0.0255 & 1.212 & 5.43 \\
+     & CSDI & 0.209 & 0.0266 & \textbf{1.281} & 5.22 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Figures/portfolio_realizations.pdf}
+  \caption{Realised cumulative log return of the tangency portfolio at the heaviest level of each missingness pattern. The oracle, estimated on the uncorrupted panel, is drawn in black; the five imputers are estimated on the corrupted panels and realised on the same true returns. Under the two MCAR patterns (left, centre) the imputed portfolios drift above the oracle by taking on more risk, while under the MNAR stressed pattern (right) they fall short of it. The two baselines, off the vertical scale, are omitted.}
+  \label{fig:portfolio_realizations}
+\end{figure}
+
+At the lightest levels there is nothing to separate them. Under sparse
+missingness at rate $0.001$, and under the shortest gaps, every imputer
+reproduces the oracle Sharpe to within a thousandth and moves the weights by
+less than $0.35$ in gross terms. The gap opens only as the missingness grows,
+and even then the five methods stay close to one another, with no single model
+leading throughout: CSDI is marginally ahead on the light sparse levels, EM and
+low-rank completion on the gaps, EM again on most of the stressed levels, and
+the best entries at the easy levels are little more than ties. What separates
+the methods is less who leads than who fails. EM and low-rank completion are the
+steadiest, never the worst at any level. BRITS keeps pace until the stressed
+level $(0.05,\,0.5,\,0.9)$, where it turns too cautious and its Sharpe falls to
+$1.30$, against the $1.51$ of EM. KNN holds the tightest weights under heavy
+sparse missingness but is left without donors at the most extreme stressed level
+and cannot be computed there. CSDI is the closest of all at that same extreme
+level, and yet at the heaviest gap it takes on the most risk of any method, with
+a realised variance of $0.29$ and a weight distance above $14$.
+
+That last case is an instance of the general pattern in how the portfolios
+degrade. As the missingness grows the imputed panels do not lose a little Sharpe
+gracefully; their realised variance climbs well above the oracle's, from $0.049$
+to values past $0.2$ at the heaviest sparse and gap levels, and the weights swell
+to many times their original size. This is the error maximisation that
+mean-variance optimisation is known for. A covariance matrix that the imputation
+has distorted, once inverted, produces an over-confident portfolio that takes
+large offsetting positions the true second moments never supported. The realised
+mean rises together with the variance, so in a market that trended upward over
+the sample these aggressive portfolios finish higher in level than the oracle
+while carrying far more risk, which the Sharpe ratio correctly discounts.
+
+Figure~\ref{fig:portfolio_realizations} makes the two regimes visible at the
+heaviest level of each pattern. Under the two MCAR patterns the imputed
+portfolios end above the oracle, with visibly larger swings along the way: the
+distorted covariance inflates risk, and in this sample the extra risk happened
+to pay. The stressed pattern is the mirror image. There the missing dates are
+the turbulent ones, the imputers never see the volatility they would need to
+price, and their portfolios fall short of the oracle outright, ending at little
+more than half of its cumulative return. CSDI comes closest, but the shortfall
+that none of them close is the one the covariance error already exposed in
+Section~\ref{sec:eval}: under MNAR the information needed to rebuild the
+portfolio is missing from the observed panel, and no imputer can supply it.
+
+The baselines show, from below, how much the imputation matters once a model is
+built on top of it. Mean replacement trails the conditional methods at almost
+every level, the exception being the very heaviest, where its heavy damping of
+the covariance, a liability everywhere else, accidentally restrains the
+over-leverage that afflicts the others. Complete-case deletion is worse, and in a
+way the reconstruction metrics could only suggest. Estimating the covariance from
+the surviving dates alone leaves it so far from the truth that the optimiser
+levers into unstable portfolios: the realised variance is already more than three
+times the oracle's at sparse rate $0.05$, the Sharpe falls to almost zero at rate
+$0.1$, and at the gap level $(1000,\,20)$ the portfolio's mean return turns
+negative. At the heaviest levels deletion cannot be evaluated at all, too few
+complete dates surviving to estimate a covariance. A method that reads as merely
+inefficient in the metric tables can, once it feeds a portfolio, produce an
+allocation that is dangerously unstable.
+
+\section{Downstream evaluation: the factor structure}
+\label{sec:results_factors}
+
+The second downstream model is the one of Section~\ref{sec:factors}. From every
+imputed panel, and from the uncorrupted one, we extract the principal components
+of the estimated covariance and compare the resulting factor model with the true
+one. Tables~\ref{tab:factors_sparses}, \ref{tab:factors_gaps}
+and~\ref{tab:factors_stressed} report the share of the panel variance carried by
+the first component and by the first five, together with the subspace distances
+$D_1$ and $D_5$. On the uncorrupted panel the first principal component carries
+$41.74\%$ of the variance and the first five carry $60.02\%$, and these are the
+values every row is read against. As with the portfolio, the two naive baselines
+are kept out of the tables and discussed at the end, so that the comparison stays
+among the imputation methods themselves.
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Factor-structure evaluation under sparse missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors.}
+  \label{tab:factors_sparses}
+  \begin{tabular}{llrrrr}
+    \toprule
+    Level & Model & $\lambda_1$ (\%) & Top-5 (\%) & $D_1$ & $D_5$ \\
+    \midrule
+    $0.001$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 41.76 & 60.04 & 0.0006 & 0.0051 \\
+     & LowRank & 41.77 & 60.06 & 0.0006 & \textbf{0.0036} \\
+     & EM & 41.77 & 60.06 & 0.0005 & 0.0040 \\
+     & BRITS & 41.77 & 60.05 & 0.0005 & 0.0046 \\
+     & CSDI & 41.77 & 60.06 & 0.0006 & 0.0041 \\
+    \midrule
+    $0.01$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 41.87 & 60.09 & 0.0030 & 0.0143 \\
+     & LowRank & 41.91 & 60.26 & 0.0026 & 0.0195 \\
+     & EM & 41.91 & 60.22 & 0.0026 & 0.0126 \\
+     & BRITS & 41.87 & 60.16 & 0.0034 & 0.0154 \\
+     & CSDI & 41.91 & 60.22 & 0.0027 & \textbf{0.0126} \\
+    \midrule
+    $0.05$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 42.28 & 60.32 & 0.0082 & 0.0364 \\
+     & LowRank & 42.64 & 61.37 & 0.0068 & 0.0809 \\
+     & EM & 42.64 & 61.19 & 0.0062 & 0.0440 \\
+     & BRITS & 42.59 & 61.14 & 0.0054 & 0.0347 \\
+     & CSDI & 42.72 & 61.18 & 0.0062 & \textbf{0.0323} \\
+    \midrule
+    $0.1$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 43.00 & 60.35 & 0.0133 & \textbf{0.0436} \\
+     & LowRank & 43.60 & 62.56 & 0.0100 & 0.2551 \\
+     & EM & 43.59 & 62.05 & 0.0094 & 0.1120 \\
+     & BRITS & 43.47 & 61.96 & 0.0100 & 0.1034 \\
+     & CSDI & 43.73 & 62.03 & 0.0122 & 0.1014 \\
+    \midrule
+    $0.3$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 45.62 & 61.19 & 0.0252 & \textbf{0.1434} \\
+     & LowRank & 47.56 & 69.35 & 0.0215 & 0.3914 \\
+     & EM & 47.88 & 67.16 & 0.0152 & 0.2039 \\
+     & BRITS & 47.09 & 66.74 & 0.0161 & 0.2376 \\
+     & CSDI & 48.54 & 67.28 & 0.0211 & 0.1954 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Factor-structure evaluation under contiguous-gap missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors.}
+  \label{tab:factors_gaps}
+  \begin{tabular}{llrrrr}
+    \toprule
+    Level & Model & $\lambda_1$ (\%) & Top-5 (\%) & $D_1$ & $D_5$ \\
+    \midrule
+    $(20,\, 10)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 41.75 & 60.02 & 0.0008 & 0.0040 \\
+     & LowRank & 41.75 & 60.03 & 0.0004 & 0.0033 \\
+     & EM & 41.75 & 60.03 & 0.0005 & 0.0034 \\
+     & BRITS & 41.75 & 60.03 & 0.0004 & 0.0029 \\
+     & CSDI & 41.75 & 60.03 & 0.0003 & \textbf{0.0027} \\
+    \midrule
+    $(200,\, 10)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 41.90 & 60.15 & 0.0034 & 0.0117 \\
+     & LowRank & 41.93 & 60.26 & 0.0031 & 0.0207 \\
+     & EM & 41.92 & 60.24 & 0.0021 & 0.0117 \\
+     & BRITS & 41.92 & 60.24 & 0.0024 & 0.0115 \\
+     & CSDI & 41.92 & 60.24 & 0.0028 & \textbf{0.0100} \\
+    \midrule
+    $(1000,\, 10)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 42.29 & 60.21 & 0.0089 & 0.0376 \\
+     & LowRank & 42.42 & 61.07 & 0.0053 & 0.0334 \\
+     & EM & 42.42 & 60.88 & 0.0047 & \textbf{0.0249} \\
+     & BRITS & 42.37 & 60.84 & 0.0046 & 0.0270 \\
+     & CSDI & 42.43 & 60.85 & 0.0040 & 0.0291 \\
+    \midrule
+    $(1000,\, 20)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 42.93 & 60.62 & 0.0179 & 0.0525 \\
+     & LowRank & 43.63 & 62.50 & 0.0143 & 0.1892 \\
+     & EM & 43.52 & 62.14 & 0.0097 & 0.0550 \\
+     & BRITS & 43.44 & 62.08 & 0.0104 & 0.0508 \\
+     & CSDI & 43.78 & 62.22 & 0.0158 & \textbf{0.0453} \\
+    \midrule
+    $(2000,\, 30)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 44.63 & 60.92 & 0.0511 & 0.1365 \\
+     & LowRank & 46.84 & 67.76 & 0.0375 & 0.3291 \\
+     & EM & 46.95 & 66.09 & 0.0262 & 0.1273 \\
+     & BRITS & 46.36 & 65.70 & 0.0252 & \textbf{0.1177} \\
+     & CSDI & 47.94 & 66.31 & 0.0465 & 0.1435 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \footnotesize
+  \caption{Factor-structure evaluation under stressed missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors.}
+  \label{tab:factors_stressed}
+  \begin{tabular}{llrrrr}
+    \toprule
+    Level & Model & $\lambda_1$ (\%) & Top-5 (\%) & $D_1$ & $D_5$ \\
+    \midrule
+    $(0,\, 0.1,\, 0.99)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 41.31 & 59.70 & 0.0106 & 0.0276 \\
+     & LowRank & 41.75 & 60.12 & 0.0079 & 0.0152 \\
+     & EM & 41.73 & 60.07 & 0.0063 & \textbf{0.0145} \\
+     & BRITS & 41.45 & 59.73 & 0.0176 & 0.0317 \\
+     & CSDI & 42.06 & 60.23 & 0.0088 & 0.0160 \\
+    \midrule
+    $(0.005,\, 0.5,\, 0.99)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 39.81 & 58.28 & 0.0309 & 0.1055 \\
+     & LowRank & 41.92 & 60.67 & 0.0180 & \textbf{0.0555} \\
+     & EM & 41.80 & 60.14 & 0.0178 & 0.0950 \\
+     & BRITS & 41.56 & 59.92 & 0.0203 & 0.0900 \\
+     & CSDI & 43.62 & 61.24 & 0.0316 & 0.1166 \\
+    \midrule
+    $(0.04,\, 0.2,\, 0.95)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 41.68 & 59.49 & 0.0169 & 0.0680 \\
+     & LowRank & 42.73 & 61.36 & 0.0149 & 0.0714 \\
+     & EM & 42.66 & 61.03 & 0.0126 & \textbf{0.0327} \\
+     & BRITS & 42.58 & 60.96 & 0.0132 & 0.0368 \\
+     & CSDI & 43.27 & 61.34 & 0.0170 & 0.0383 \\
+    \midrule
+    $(0.05,\, 0.5,\, 0.9)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & 40.27 & 57.71 & 0.0398 & 0.1131 \\
+     & LowRank & 43.50 & 63.34 & 0.0268 & 0.3293 \\
+     & EM & 43.29 & 61.77 & 0.0232 & \textbf{0.0843} \\
+     & BRITS & 40.36 & 59.06 & 0.1407 & 0.1219 \\
+     & CSDI & 44.63 & 62.49 & 0.0303 & 0.0964 \\
+    \midrule
+    $(0.2,\, 1,\, 0.9)$ & True (reference) & 41.74 & 60.02 & -- & -- \\
+     & KNN & -- & -- & -- & -- \\
+     & LowRank & 25.12 & 51.75 & 0.1186 & 0.3814 \\
+     & EM & 24.81 & 49.58 & 0.1148 & 0.1343 \\
+     & BRITS & 25.19 & 50.00 & 0.1106 & \textbf{0.1184} \\
+     & CSDI & 25.01 & 49.66 & 0.1141 & 0.1340 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth]{Figures/factor_structure.pdf}
+  \caption{Factor structure at the heaviest level of each missingness pattern. Top: share of the panel variance carried by each of the first fifteen principal components, on a logarithmic scale, with the uncorrupted panel in black. Bottom: the fifteen principal angles between the true and the estimated fifteen-factor spaces, in increasing order. The leading directions are recovered to within a few degrees by every method, and the rotation grows with the depth of the factor.}
+  \label{fig:factor_structure}
+\end{figure}
+
+The first factor survives almost everything. Under sparse missingness at rate
+$0.3$, where a third of the panel is gone, $D_1$ stays below $0.026$ for every
+method, an angle of less than a degree and a half between the estimated market
+factor and the true one. The five-factor space is a different matter: at the
+same level $D_5$ runs from $0.14$ to $0.39$, between six and eighteen times
+larger. The damage is not spread evenly over the leading factors but
+concentrated at the point where the spectrum stops separating them. The fifth
+and sixth true eigenvalues carry $2.77\%$ and $2.41\%$ of the variance, close
+enough that little in the data distinguishes their directions, and it is exactly
+there that the imputations diverge. At sparse rate $0.3$ the first four
+directions are recovered to within about six degrees by KNN, EM, BRITS and CSDI,
+while their fifth is off by between $16.5$ and $31.4$ degrees. The angle profiles in
+Figure~\ref{fig:factor_structure} show the same thing over a longer range: the
+rotation stays small through the first eight or ten factors and then climbs
+steeply.
+
+The spectrum is distorted in a consistent direction. Every conditional imputer
+raises the weight of the first factor, from $41.74\%$ to between $45.6\%$ and
+$48.5\%$ at sparse rate $0.3$, and raises the five-factor share from $60.02\%$
+to between $61.2\%$ and $69.3\%$. The reason is visible in what these methods
+do. An imputed value is a conditional mean, a combination of the assets observed
+on the same date, so it lies closer to the dominant directions of the panel than
+a real return does, and the more entries are filled the more the panel comes to
+look like its own factor model. The top row of
+Figure~\ref{fig:factor_structure} shows the effect across the whole spectrum:
+under the two MCAR patterns the imputed curves sit above the true one at the
+head and below it in the tail. A downstream user reading these panels would
+conclude that the market is more tightly coupled than it is, and would
+underestimate the idiosyncratic variance that a hedge has to absorb.
+
+Among the methods, low-rank completion behaves in a way worth isolating. It has
+the largest $D_5$ at ten of the fifteen levels, and at eight of the nine
+heaviest, reaching $0.39$ under sparse missingness at rate $0.3$ and $0.33$ at
+the stressed level $(0.05,\,0.5,\,0.9)$, against $0.21$ and $0.08$ for EM at the
+same levels. Its five-factor variance share is also the most inflated, $69.3\%$
+against a true $60.0\%$. The direction of this result is worth stating plainly,
+because it is the opposite of what the method's construction would suggest. Low
+rank completion is the one imputer that explicitly imposes a factor structure,
+and an evaluation of factor structure might be expected to favour it. What
+happens instead is that truncating the spectrum removes precisely the weakly
+separated middle directions: at sparse rate $0.3$ its fifth factor is rotated by
+$55.8$ degrees, where the worst of the other methods is at $31.4$. It recovers
+the market factor as well as anyone and pays for it deeper down.
+
+BRITS fails once, and the failure is informative. At the stressed level
+$(0.05,\,0.5,\,0.9)$ its $D_1$ is $0.141$, an angle of eight degrees on the
+leading factor, where the other four methods stay between $0.023$ and $0.040$,
+under two and a half degrees. This is the same level at which its portfolio Sharpe
+collapsed to $1.30$ in Table~\ref{tab:portfolio_stressed} while EM and CSDI held
+above $1.50$. The portfolio evaluation registered that something had gone wrong
+but could not say what; the factor evaluation locates it, in a rotation of the
+market factor itself, which no amount of care further down the spectrum can
+compensate.
+
+At the most extreme stressed level the ranking dissolves and all the methods
+fail together. The first factor falls from $41.74\%$ to about $25\%$ and the
+five-factor share from $60.02\%$ to about $50\%$, for low-rank completion, EM,
+BRITS and CSDI alike, with $D_1$ between $0.111$ and $0.119$ for all of them and
+KNN left without donors. The mechanism explains the uniformity. Stressed
+missingness removes the most turbulent dates, and those are the dates on which
+correlations rise and the market factor dominates, so what has been deleted is
+not a random part of the panel but the part that carries the factor structure.
+The right-hand column of Figure~\ref{fig:factor_structure} shows every imputed
+spectrum lying flatter than the truth. This is the same conclusion the portfolio
+reached at this level, and the same one the covariance error of
+Section~\ref{sec:eval} reached before it: under MNAR the information is not in
+the observed panel, so no method can recover it and none of them separate.
+
+The baselines fail in opposite directions, which is itself instructive. Mean
+replacement dilutes the factor structure rather than concentrating it, taking
+the first component down to $30.6\%$ at sparse rate $0.3$ and to $18.1\%$ at the
+extreme stressed level, since a constant inserted in place of a return is
+uncorrelated with everything else in the cross section. Complete-case deletion
+is erratic in a way the reconstruction metrics never suggested. At the gap level
+$(1000,\,20)$ only $33$ dates survive and its leading eigenvector is nearly
+orthogonal to the true one, $D_1 = 0.977$; at $(2000,\,30)$ three dates survive
+and five components exhaust the variance of the panel entirely; at sparse rate
+$0.3$ and at the extreme stressed level no complete date survives at all and
+nothing can be estimated. Between them the two baselines bracket the failure:
+one flattens the factor structure, the other invents one.
+
+The two downstream evaluations meet here. Since
+$\hat{\bSigma}^{-1} = \sum_i \hat\lambda_i^{-1} \hat v_i \hat v_i^\top$, the
+inverse the portfolio depends on weights each direction by the reciprocal of its
+variance, so it loads most heavily on the trailing eigenvectors, which are
+exactly the directions the angle profiles show to be least reliable. The error
+maximisation of Section~\ref{sec:results_portfolio} is therefore not a separate
+defect of mean-variance optimisation. It is the distortion measured here, seen
+through an inverse that magnifies whatever the imputation has left in the parts
+of the spectrum it understands worst.
+
 \section{Computational costs}
 
 The scores above say nothing about what each model costs to produce, so we

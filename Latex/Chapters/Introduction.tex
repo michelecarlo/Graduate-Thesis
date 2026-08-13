@@ -71,11 +71,50 @@ by economics and finance.
 \subsection{Foundations}
 \label{sec:lit_foundations}
 
-Until the mid-1970s missing data was mostly treated as a nuisance to
-be engineered away: incomplete records were dropped, or filled in with
-some convenient value, and the analysis proceeded as if nothing had
-happened. The turning point is \citet{rubin1976}, who proposed to
-treat missingness itself as a random object. Given a data matrix and
+Dropping incomplete records, or filling them with some convenient
+value and proceeding as if nothing had happened, has always been
+common practice. It was not, however, the only option available, and
+the problem was attacked seriously long before it acquired its modern
+formulation. In the design-of-experiments tradition of the 1930s an
+incomplete field trial was already handled by an explicit estimate of
+what had not been observed. \citet{allan1930} gave the first missing
+plot formula: for a randomized block design they derived the value
+which, once inserted in the empty cell, leaves the treatment
+comparisons of the analysis of variance unbiased. \citet{yates1933}
+extended the device to any number of missing plots and to more general
+layouts, and identified the principle behind it, namely that the
+substituted values are exactly those that minimize the residual sum of
+squares. He also observed that the degrees of freedom must be reduced
+by the number of values supplied, since a filled cell carries no
+information of its own; the same warning applies to every single
+imputation in this thesis. \citet{bartlett1937} then recast the
+computation as an analysis of covariance with one dummy covariate per
+missing observation, which returns the estimate and the corrected
+residual sum of squares in a single pass.
+
+Outside designed experiments the work started just as early.
+\citet{wilks1932} studied the moments of estimates computed from
+fragmentary samples of a multivariate normal population,
+\citet{anderson1957} later obtained closed-form maximum likelihood
+estimates when the pattern of missingness is nested, and \citet{buck1960}
+proposed filling each gap with a regression prediction from the
+variables observed on the same unit, a method he wrote for use on an
+electronic computer. Computers also turned the iterative version of
+Yates's method into a general algorithm: \citet{healy1956} start from
+a guess for the missing entries, fit the model by least squares,
+replace the entries by their fitted values, and iterate until the
+values stabilize. \citet{dempster1977} would later list this scheme
+among the special cases their algorithm unifies. By the time
+\citet{afifi1966} reviewed the field there was already a substantial
+body of techniques, and \citet{orchard1972} had extracted from it a
+missing information principle of some generality. What this work
+lacked was a language for the missingness itself. Every procedure
+carried an implicit assumption about why the entries were absent, the
+assumption was rarely stated, and there was no way to say when a
+procedure was justified and when it was not.
+
+The turning point is \citet{rubin1976}, who supplied that language by
+treating missingness itself as a random object. Given a data matrix and
 an indicator matrix flagging which entries are observed, the joint
 distribution factorizes into the law of the data and the law of the
 \emph{missingness mechanism}, the conditional distribution of the
@@ -306,10 +345,72 @@ the intersection of these three strands.
 \section{Research questions}
 \label{sec:questions}
 
+The thesis is organised around four questions.
+
+\begin{enumerate}
+    \item \textbf{What drives the damage, the amount of missing data or the
+    mechanism that produced it?} We compare patterns that remove entries at
+    random with a pattern that removes them preferentially in turbulent
+    periods, at comparable shares of missing cells.
+
+    \item \textbf{Do the deep imputers earn their cost?} Recurrent and
+    diffusion-based models are the current state of the art on imputation
+    benchmarks. We ask whether they improve on classical likelihood and
+    low-rank estimators on a financial panel, and what any improvement is
+    worth once training and sampling time are counted.
+
+    \item \textbf{Is pointwise accuracy a good proxy for the quality of the
+    imputed panel?} Reconstruction error is the standard criterion, but no
+    downstream model consumes individual cells. We ask whether a method that
+    fills the holes accurately also preserves the covariance matrix, the
+    tails, the marginal distributions and the temporal dependence of the
+    returns.
+
+    \item \textbf{Do the rankings survive downstream?} We ask whether the
+    ordering of the methods given by the reconstruction metrics is the same
+    ordering given by the decisions a user would take on the imputed panel,
+    and where the two disagree.
+\end{enumerate}
 
 \section{Contributions}
 \label{sec:contributions}
 
+\begin{enumerate}
+    \item A controlled testbed for imputation on financial data: a complete
+    panel of daily log returns for fifty S\&P~500 constituents, three
+    injection mechanisms at five severities each, and seven imputers from
+    deletion to a conditional diffusion model, all implemented and run within
+    a single framework.
+
+    \item An evaluation suite that goes past reconstruction error. Alongside
+    MAE and RMSE we score the covariance matrix, the five percent
+    Value-at-Risk, the marginal distributions in Wasserstein distance, and two
+    temporal statistics, the autocorrelation of absolute returns and the
+    leverage curve, which the permutation-invariant metrics cannot detect.
+
+    \item The downstream evaluations, in which an imputation is judged by the
+    object a user would build on it, referenced against the same object built
+    on the uncorrupted panel. We instantiate the idea twice, with the tangency
+    portfolio and with the factor structure of the panel, and design both to
+    rank the reconstruction methods against one another rather than against a
+    naive baseline.
+
+    \item The empirical findings themselves, among them that pointwise and
+    structural quality can diverge by close to an order of magnitude, that the
+    neural models do not improve on EM at a computational cost several orders
+    of magnitude higher, that every conditional imputer inflates the factor
+    structure of the panel because the values it inserts are conditional
+    means, and that the ranking of the methods is least stable exactly where
+    the data is missing not at random.
+\end{enumerate}
 
 \section{Outline of the thesis}
 \label{sec:outline}
+
+Chapter~\ref{ch:methodology} describes the data, the three injection
+mechanisms, the seven imputation models and the evaluation criteria, both the
+pointwise and structural metrics and the two downstream evaluations.
+Chapter~\ref{ch:results} reports the results, one table per injection pattern,
+then the portfolio and the factor-structure evaluations, and closes with the
+computational cost of each method. Chapter~\ref{ch:conclusion} returns to the
+four questions above and states what remains open.

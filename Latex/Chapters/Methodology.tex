@@ -349,3 +349,112 @@ computed on the surviving subsample.
 All seven metrics are computed by a single evaluation routine for every
 model, missingness pattern and missingness level; the resulting tables are
 collected and discussed in Chapter~\ref{ch:results}.
+
+\subsection{Downstream evaluations}
+\label{sec:downstream}
+
+The seven metrics above compare the imputed panel with the truth directly. A
+complementary and in some ways more honest test asks a different question: if
+we build several models on the imputed panel, how far is their output from each other?
+We call this class of criteria downstream
+evaluations. We fix a downstream model, fit it once on each imputed panel, and
+compare the fitted objects across the imputation methods and against the one
+fitted on the uncorrupted panel. The aim is to rank the imputation
+methods against one another rather than against a naive baseline, so we keep
+these results separate from the tables of Chapter~\ref{ch:results}. Two such
+evaluations follow, the optimal portfolio and the factor structure of the
+panel.
+
+\subsubsection{Optimal portfolio}
+\label{sec:portfolio}
+
+The most classical downstream model in finance is mean-variance portfolio
+selection \citep{markowitz1952}. From a return panel we estimate the mean
+vector $\hat{\bmu}$ and the covariance matrix $\hat{\bSigma}$ and form the
+fully invested tangency portfolio, the point of the efficient frontier with
+the highest ratio of expected return to volatility:
+\[
+\hat{w} = \frac{\hat{\bSigma}^{-1}\hat{\bmu}}
+               {\bone^\top \hat{\bSigma}^{-1}\hat{\bmu}},
+\qquad
+\bone^\top \hat{w} = 1 .
+\]
+Short positions are allowed, as in the unconstrained classical problem. The
+covariance enters through its inverse, so any distortion the imputation leaves
+in $\hat{\bSigma}$, the very object Section~\ref{geometry} set out to preserve,
+is carried into the weights and often amplified there. The portfolio is in this
+sense a direct stress test of the structural quality that the covariance error
+of Section~\ref{sec:eval} measures in the aggregate.
+
+We compute $\hat{w}$ once for every imputed panel and once for the uncorrupted
+panel. To judge an allocation we do not trust the panel it was estimated on: we
+realise each weight vector on the true returns,
+\[
+r^{p}_t = r_t^\top \hat{w} ,
+\]
+and report the annualised mean and variance of the resulting series $r^{p}$,
+together with its Sharpe ratio, annualising with $252$ trading days and taking a
+zero risk-free rate. The portfolio built on the true panel is the oracle: it is
+the best in-sample allocation available, and every imputation is judged by how
+close its realised moments, and its weights, come to it. A method that preserves
+the second-moment geometry recovers weights near the oracle and a comparable
+realised mean and variance. One that distorts that geometry, or that discards
+data as complete-case deletion does, produces weights that look optimal on the
+panel it saw and perform poorly once confronted with the real returns. The
+comparison is reported in Chapter~\ref{ch:results}, in a table of realised
+moments and a plot of the realised series, kept apart from the metric tables
+above.
+
+\subsubsection{Factor structure}
+\label{sec:factors}
+
+The portfolio reads the covariance through its inverse, so it measures the
+distortion left by the imputation and the amplification of that distortion at
+the same time. The second downstream model separates them. We take the
+statistical factor model of the panel, that is the principal components of
+$\hat{\bSigma}$, and compare the factors extracted from each imputed panel with
+those of the uncorrupted one. Nothing is inverted here, so what the comparison
+reports is the damage to the second moments alone.
+
+Write the spectral decomposition of the estimated covariance as
+\[
+\hat{\bSigma} = \sum_{i=1}^{N} \hat\lambda_i\, \hat v_i \hat v_i^\top ,
+\qquad
+\hat\lambda_1 \ge \dots \ge \hat\lambda_N \ge 0 ,
+\]
+with orthonormal eigenvectors $\hat v_i$. The first $k$ of them, collected in
+the $N \times k$ matrix $\hat V_k$, are the loadings of the $k$ leading
+statistical factors, and in a panel of equity returns the first of these is the
+market factor. We report two things. The first is the spectrum, through the
+share of the total variance
+\[
+\hat\lambda_i \Big/ \sum_{j=1}^{N} \hat\lambda_j
+\]
+carried by each component, which says whether the imputation has concentrated
+the panel into fewer factors than the data support or spread it over more. The
+second is the position of the factor space itself. Let $V_k$ be the true
+loadings and let $\theta_1 \le \dots \le \theta_k$ be the principal angles
+between the two subspaces, the cosines of which are the singular values of
+$V_k^\top \hat V_k$. We summarise them by
+\[
+D_k = \frac{1}{\sqrt{k}}
+      \left( \sum_{i=1}^{k} \sin^2 \theta_i \right)^{1/2} \in [0,1] ,
+\]
+the root mean square of their sines, which is $0$ when the two factor spaces
+coincide and $1$ when they are orthogonal. Comparing subspaces rather than
+individual eigenvectors makes the criterion invariant to the sign of each
+$\hat v_i$ and to any reordering among factors of nearly equal variance, both of
+which are arbitrary. Dividing by $\sqrt{k}$ keeps the values comparable across
+different numbers of factors.
+
+The two downstream evaluations are connected by the same decomposition. Since
+$\hat{\bSigma}^{-1} = \sum_i \hat\lambda_i^{-1} \hat v_i \hat v_i^\top$, the
+inverse on which the portfolio of Section~\ref{sec:portfolio} depends weights
+each direction by the reciprocal of its variance, so it is dominated by the
+eigenvectors carrying the smallest eigenvalues. These are the directions
+supported by the least data, and the ones an imputation has the least
+information to recover. Reporting $D_k$ as $k$ grows therefore says how deep
+into the spectrum an imputation remains trustworthy, which is what the portfolio
+implicitly relies on. We report $D_k$ at $k=1$ and $k=5$ together with the
+variance shares, and plot the full spectrum and angle profile, in
+Chapter~\ref{ch:results}.
