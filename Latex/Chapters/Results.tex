@@ -17,16 +17,121 @@ The ranking of the models is stable across patterns and levels. The
 conditional methods dominate the two baselines everywhere, EM is rarely
 beaten and never by a wide margin, and the neural models match it at a much
 higher computational cost rather than improving on it; BRITS falls clearly
-behind at two of the stressed levels. The tables also confirm the
-distinction of Section~\ref{sec:eval} between pointwise and structural
-quality: under the MCAR patterns the MAE of zero imputation is only about
-fifty percent larger than the best one, while its covariance error is close
-to an order of magnitude worse than that of EM, so a model can look
-acceptable entry by entry and still distort the geometry of the panel. The
-stressed pattern, finally, shows how much harder MNAR is. At the heaviest
-level no method brings the relative covariance error below $0.6$; the
-turbulent dates are simply no longer in the data, and nothing in the
-observed sample allows any model to recover them.
+behind at two of the stressed levels.
+
+That EM is so hard to beat is less surprising than it first looks. Daily
+returns are close to serially uncorrelated, so nearly everything that can be
+known about a missing entry is carried by the returns observed on the same
+date, and the conditional mean of Section~\ref{sec:models} extracts exactly
+that. What is left over is idiosyncratic and no model can predict it. The
+pointwise columns therefore have a floor, and it is reached almost at once:
+EM's MAE stays between $0.0071$ and $0.0080$ across the whole sparse table,
+and the five conditional methods are separated in the third decimal. The
+additional capacity of BRITS and CSDI has little to act on, since the
+expectation of a return given its cross-section is close to linear and the
+residual is close to noise. They are not punished for that capacity, they
+simply cannot be paid for it.
+
+The same floor is why the pointwise and the structural columns disagree about
+severity. MAE and RMSE average over the imputed cells, so they report how hard
+a typical fill is and stay flat as the number of fills grows: EM's sparse MAE
+is $0.0080$ at rate $0.001$ and $0.0074$ at rate $0.3$, and zero imputation is
+just as flat at about $0.011$ throughout. The covariance error accumulates
+those same per-cell errors over the whole panel, and across the same range it
+grows by a factor of almost forty, from $0.0015$ to $0.0565$. Read down the
+two families, the amount of missing data is nearly invisible in the first and
+is the leading term in the second. This is the distinction of
+Section~\ref{sec:eval} between pointwise and structural quality in its
+plainest form: under the MCAR patterns the MAE of zero imputation is only
+about fifty percent larger than the best one, while its covariance error is
+close to an order of magnitude worse than that of EM, so a model can look
+acceptable entry by entry and still distort the geometry of the panel.
+
+The two families do not even agree on what a good fill is. Minimising squared
+error asks for a conditional mean, which is by construction less variable than
+the return it replaces, so the fill that is best entry by entry is also the one
+that damps the second moment most. The tables show the exchange being made. At
+the stressed levels $(0.005,\, 0.5,\, 0.99)$ and $(0.05,\, 0.5,\, 0.9)$
+low-rank completion loses to EM on MAE and beats it on the covariance error,
+and at sparse rate $0.3$ BRITS does the same. Low-rank completion is helped
+here by the norm as much as by the fill: a relative Frobenius error weighs the
+large entries of $\bSigma$, which are the factor-driven ones, so a method that
+places every fill on the leading subspace reproduces those and neglects the
+directions the norm barely counts. Section~\ref{sec:results_factors} shows what
+that costs.
+
+Which metric is read also decides how much can be told apart at all. The
+Value-at-Risk and Wasserstein errors are computed one asset at a time, and a
+marginal distribution of daily returns is easy to reproduce: a fill of roughly
+the right size leaves it almost intact, which is why both columns are zero to
+four decimal places at the lighter levels and separate the models only at the
+heaviest. At sparse rate $0.3$ zero imputation is two and a half times worse
+than the best model on the Value-at-Risk error and nearly nine times worse on
+the covariance error, from the same panel. The covariance, absolute-return
+autocorrelation and leverage errors are all built from products of returns,
+and they require a fill to stand in the right relation to the other assets on
+its date and to the neighbouring dates. Producing a plausible number is easy;
+producing a number that is plausible jointly with the rest of the panel is
+not, and only the second family of metrics can tell the two apart.
+
+The three patterns then differ in which of those relations they destroy. Since
+the levels are matched on the share of missing cells, the row blocks of the
+three tables can be read across, and the first result of doing so is that the
+two MCAR tables are almost interchangeable. EM's covariance error under
+contiguous gaps is never more than five percent worse than under sparse
+missingness and at three of the five levels it is better, although the two
+patterns delete cells in entirely different geometries, isolated entries in one
+case and runs of up to thirty consecutive days in the other. Breaking the time
+axis costs a cross-sectional imputer nothing, because on any date the other
+forty-nine assets are still observed, and for a nearly serially uncorrelated
+return that is the informative conditioning set anyway. The only model with
+anything at stake is BRITS, which propagates along time, and the gap table
+shows both sides of it: at $(20,\, 10)$ the runs are short, the decayed history
+is still fresh next to each hole and BRITS has the best MAE and RMSE at that
+level, while at $(2000,\, 30)$ that channel has faded and it falls back on the
+cross-section, ending up indistinguishable from EM.
+
+The stressed pattern removes the conditioning set itself. Its deletions are
+drawn by date and are therefore aligned across assets, so the cross-section
+that the other two patterns leave intact is exactly what thins out, to the
+point where KNN has no well-observed donors left at the last level and returns
+nothing at all. At matched shares the gap is wide: at about ten percent missing
+EM's covariance error is $0.0237$ under sparse, $0.0238$ under gaps and
+$0.0554$ under stressed, and at about thirty percent it is $0.0565$, $0.0589$
+and $0.6634$. The thinner conditioning is the smaller half of the explanation.
+The deleted returns are not a random draw but the largest ones, so a model
+fitted to the calm surviving sample fills turbulent dates with calm values and
+has nothing to tell it otherwise. The error sits in the target rather than in
+the estimator, which is why the stressed table degrades in a way that no amount
+of model capacity addresses. At the heaviest level no method brings the
+relative covariance error below $0.6$; the turbulent dates are simply no longer
+in the data, and nothing in the observed sample allows any model to recover
+them.
+
+This is also what separates the two levels at which BRITS falls behind,
+$(0,\, 0.1,\, 0.99)$ and $(0.05,\, 0.5,\, 0.9)$, the two whose deleted entries
+are the most extreme relative to what stays visible. In the first, every
+missing cell lies on the one percent most turbulent dates, and BRITS returns an
+MAE of $0.0301$ against EM's $0.0133$, behind even KNN. EM's fill is a linear
+function of the block observed on the same date, so when the other assets move
+by five percent the fill moves with them, whereas a regression head trained
+self-supervised on a panel of ordinary dates has learned to produce ordinary
+values and does not extrapolate. In the second, half of the entries on the most
+turbulent tenth of dates are gone, which degrades both of BRITS's channels at
+once, and its covariance error is nearly four times EM's.
+
+The largest numbers in the tables belong to Deletion, and they measure
+something other than imputation error. It imputes nothing, so its covariance
+error of $1.4799$ at $(2000,\, 30)$, more than three times that of zero
+imputation, records how few dates survive the requirement that all fifty assets
+be observed at once, and under the stressed pattern it records in addition that
+the survivors are calm by construction.
+
+At the extreme stressed level, finally, the ranking compresses to nothing.
+Every surviving model reports an MAE between $0.0134$ and $0.0137$ and a
+covariance error between $0.648$ and $0.663$, and zero imputation, hopeless
+everywhere else, reaches $0.768$. The differences between imputation methods
+are informative only while there is something left in the panel to recover.
 
 \begin{table}[p]
   \centering
@@ -659,6 +764,7 @@ through an inverse that magnifies whatever the imputation has left in the parts
 of the spectrum it understands worst.
 
 \section{Computational costs}
+\label{sec:costs}
 
 The scores above say nothing about what each model costs to produce, so we
 close the chapter with the computational side of the experiments.

@@ -1,0 +1,104 @@
+\chapter{Conclusion}
+\label{ch:conclusion}
+
+\section{Summary}
+
+This thesis measured what is lost when the missing entries of a panel of daily
+equity returns are filled in. Fifty S\&P~500 constituents over sixteen years
+were corrupted under three mechanisms at five severities each, reconstructed by
+seven methods, and scored both against the truth directly and through two models
+a user would build on the result. We return to the four questions of
+Section~\ref{sec:questions}.
+
+The mechanism matters more than the amount. Under the two random patterns the
+methods hold up even when a third of the panel is gone: at sparse rate $0.3$ the
+market factor is still recovered to within a degree and a half of the true one.
+Under the stressed pattern, which removes turbulent dates, the same methods
+break down at far smaller shares of missing data. At the heaviest level none
+brings the relative covariance error below $0.6$, the first principal component
+falls from $41.74\%$ to about $25\%$, and the realised portfolios end at little
+more than half of the oracle's cumulative return, with the five imputers
+indistinguishable from one another. What has been deleted there is not a random
+part of the sample but the part that carries the covariance structure, and no
+model can recover from the observed panel what the observed panel does not
+contain. A comparable share of missing cells is not a comparable problem.
+
+The deep models do not earn their cost. EM is rarely beaten in the metric tables
+and never by a wide margin, CSDI matches it, and BRITS falls behind at two of
+the stressed levels. EM fills a panel in about a second, while CSDI needs some
+twenty-four minutes of sampling after four hours of training, four orders of
+magnitude more for a reconstruction that is not better. The comparison is tied
+to the training budget and the hardware of Section~\ref{sec:costs}, but the size
+of the gap leaves a good deal of room before the conclusion would turn.
+
+Pointwise accuracy is a poor proxy for the quality of an imputed panel. Under
+the MCAR patterns the MAE of mean replacement is only about fifty percent worse
+than the best, while its covariance error is close to an order of magnitude
+worse than EM's, so a method can look acceptable entry by entry and still
+distort the geometry of the panel. The distortion is also systematic rather than
+noisy. Every conditional imputer raises the share of variance carried by the
+first factor, from $41.74\%$ to between $45.6\%$ and $48.5\%$ at sparse rate
+$0.3$, because the value it inserts is a conditional mean and therefore lies
+closer to the dominant directions of the panel than a real return does. The more
+entries are filled, the more the panel comes to look like its own factor model,
+and no pointwise metric registers this.
+
+The rankings largely survive downstream, and the exceptions carry the most
+information. Low-rank completion is among the most accurate methods entry by
+entry and has the largest five-factor subspace distance at ten of the fifteen
+levels, reaching $0.39$ at sparse rate $0.3$ against $0.21$ for EM, since
+truncating the spectrum discards exactly the weakly separated middle directions.
+Complete-case deletion reads as merely inefficient in the metric tables and
+produces allocations whose Sharpe ratio falls to almost zero at sparse rate
+$0.1$ and whose mean return turns negative at the gap level $(1000,\,20)$. The
+two downstream evaluations are themselves connected: since
+$\hat{\bSigma}^{-1} = \sum_i \hat\lambda_i^{-1} \hat v_i \hat v_i^\top$, the
+portfolio weights each direction by the reciprocal of its variance and so loads
+most heavily on the trailing eigenvectors, which are the directions the
+imputations recover worst. The error maximisation seen in
+Section~\ref{sec:results_portfolio} is that distortion viewed through an inverse
+that magnifies it.
+
+The practical reading is that an imputation should be scored against the use it
+is put to. Reconstruction error orders the methods correctly at the easy levels,
+where the ordering hardly matters, and is least informative exactly where the
+choice of method is consequential.
+
+\section{Limitations}
+
+The evidence comes from a single panel: fifty liquid large-cap equities from one
+market over one period, at daily frequency. Fifty assets against $4125$ dates is
+a comfortable ratio for covariance estimation, and a cross section closer in size
+to the sample length would make every estimate less stable and would likely widen
+the differences reported here. The missingness is injected rather than observed,
+so its mechanism is known and stationary, whereas real gaps arise from halts,
+delistings and illiquidity and follow no law the experimenter can write down; the
+stressed pattern is a stylised form of MNAR and not a model of any particular
+cause. Each configuration was run once, so the tables carry no estimate of
+sampling variation around the numbers they report. The two downstream evaluations
+both read the covariance matrix, which makes them complementary but not
+independent tests. Finally, all seven methods are smoothers. BRITS reads the
+panel in both directions and CSDI conditions on every observed value, so the
+results describe reconstruction after the fact and not what would be available to
+a user filling a gap in real time, with only the past in hand.
+
+\section{Future Work}
+
+The last of those limitations is the natural continuation. Restricting each
+imputer to the information available up to the date being filled turns the
+problem from smoothing into a filtering one and makes the cost of that
+restriction measurable, which is what a user working in real time needs to know
+and what the benchmarks in the literature do not report. A second direction is
+to widen the downstream evaluations beyond the second moment, with a
+Value-at-Risk backtest, a hedging exercise or a trading rule, since a criterion
+that does not pass through the covariance would test parts of the reconstruction
+that neither of the present evaluations reaches. A third is to carry the
+uncertainty of the imputation forward instead of discarding it. CSDI produces a
+predictive distribution that we collapsed to a median, and the inflation of the
+factor structure documented above is precisely the artefact that averaging
+conditional means creates, so a multiple-imputation treatment in which the
+downstream decision sees the spread rather than a point estimate should correct
+it. Beyond these, the same design applies directly to larger cross sections,
+lower frequencies and other asset classes, and eventually to panels whose gaps
+are real rather than injected, where the mechanism has to be inferred rather
+than assumed.
