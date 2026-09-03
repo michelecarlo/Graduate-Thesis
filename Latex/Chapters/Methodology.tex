@@ -17,7 +17,7 @@ be tweaked to solve adjacent problems.
 
 As our main baseline, we chose the most studied and reliable dataset in finance:
 the end-of-day prices of the S\&P500, in this case fetched with yfinance from
-1/1/2010 to 30/5/2026 (potrei cambiare le date). It clearly is not a dataset inflicted
+1/1/2010 to 30/5/2026. It clearly is not a dataset inflicted
 with the curse of missing data; the only structural ones being occasional circuit breaks
 and listings/delistings from the index. To obtain a full dataset with no "real"
 missing data, we removed each stock that contained at least one missing observation.
@@ -48,11 +48,6 @@ We will thus focus on $R_t$.
 
 \subsection{Missingness Injection}
 \label{sec:missingness}
-
-(Da scrivere meglio, questa è solo l'outline)
-
-\FloatBarrier
-As outlined in the literature review \dots
 
 We used three algorithms to simulate different missingness patterns:
 
