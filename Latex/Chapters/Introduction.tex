@@ -35,7 +35,7 @@ option trade has occurred.
 Macro and alternative data arrive at mixed, irregular frequencies, with
 publication lags that create structural gaps at the daily level.
 This missing data is pervasive and often elusive, and gets in the way
-of advanced analysis. Thus practitioners or a researchers face
+of advanced analysis. Thus practitioners and researchers face
 the same decision: what value should be attributed to the missing
 observation, and how much uncertainty should be attached to that
 attribution?
@@ -44,17 +44,17 @@ The simplest and most common solution is to carry forward the last observed valu
 but this can lead to systematic mispricing, underestimation of risk, and distortion
 of correlations among assets.
 
-We aim to take a different path, one that looks for solutions that aim to preserve as much
+We aim to take a different path, one that looks for solutions preserving as much
 as possible the statistical properties of the series, in order to maintain the integrity of
-the underlying data and consequently the robustness of any downstream model that relies on it.
-Since this can be considered an inference problem, we will also explore ML algorithms,
-and in classical machine learning approach, we will
-focus on quality of inference rather than interpretability of the model.
+the underlying data and consequently the robustness of any downstream model that relies on
+it. Since this can be considered an inference problem, we also explore machine learning
+algorithms, and, as is usual in that literature, we focus on the quality of the inference
+rather than on the interpretability of the model.
 
-In this thesis we will test these different methods of imputation, and evaluate them not only on the
-accuracy of the imputation itself (MSE,...),
-but also on the quality of the downstream model that uses the imputed data, and how
-far it deviates from the case where all data is observed.
+In this thesis we test these different methods of imputation and evaluate them not
+only on the accuracy of the imputation itself, through metrics such as MSE, but
+also on the quality of the downstream model that uses the imputed data, and on how
+far that model deviates from the one obtained when all the data is observed.
 
 \section{Literature review}
 \label{sec:literature}
@@ -78,12 +78,12 @@ the problem was attacked seriously long before it acquired its modern
 formulation. In the design-of-experiments tradition of the 1930s an
 incomplete field trial was already handled by an explicit estimate of
 what had not been observed. \citet{allan1930} gave the first missing
-plot formula: for a randomized block design they derived the value
+plot formula: for a randomised block design they derived the value
 which, once inserted in the empty cell, leaves the treatment
 comparisons of the analysis of variance unbiased. \citet{yates1933}
 extended the device to any number of missing plots and to more general
 layouts, and identified the principle behind it, namely that the
-substituted values are exactly those that minimize the residual sum of
+substituted values are exactly those that minimise the residual sum of
 squares. He also observed that the degrees of freedom must be reduced
 by the number of values supplied, since a filled cell carries no
 information of its own; the same warning applies to every single
@@ -103,7 +103,7 @@ electronic computer. Computers also turned the iterative version of
 Yates's method into a general algorithm: \citet{healy1956} start from
 a guess for the missing entries, fit the model by least squares,
 replace the entries by their fitted values, and iterate until the
-values stabilize. \citet{dempster1977} would later list this scheme
+values stabilise. \citet{dempster1977} would later list this scheme
 among the special cases their algorithm unifies. By the time
 \citet{afifi1966} reviewed the field there was already a substantial
 body of techniques, and \citet{orchard1972} had extracted from it a
@@ -116,7 +116,7 @@ procedure was justified and when it was not.
 The turning point is \citet{rubin1976}, who supplied that language by
 treating missingness itself as a random object. Given a data matrix and
 an indicator matrix flagging which entries are observed, the joint
-distribution factorizes into the law of the data and the law of the
+distribution factorises into the law of the data and the law of the
 \emph{missingness mechanism}, the conditional distribution of the
 indicators given the data. Rubin's classification of this mechanism
 is still the standard language of the field: data are missing
@@ -132,7 +132,7 @@ missingness pattern of Section~\ref{sec:missingness}, every method
 that relies on it stands on shaky ground.
 
 The monograph of \citet{little2019}, first published in 1987,
-organized the field around this framework and remains its canonical
+organised the field around this framework and remains its canonical
 reference. Their taxonomy of approaches (complete-case analysis,
 weighting, single imputation, likelihood-based methods) is still the
 way the subject is taught, and their analysis of the simple methods is
@@ -175,15 +175,15 @@ formulation, which is the natural setting for financial time series.
 \subsection{Likelihood methods and the EM algorithm}
 \label{sec:lit_em}
 
-Once ignorability is granted, inference reduces to maximizing the
+Once ignorability is granted, inference reduces to maximising the
 observed-data likelihood, which almost never has a closed form because
 the missing entries must be integrated out. The
-Expectation--Maximization algorithm of \citet{dempster1977} is the
+Expectation--Maximisation algorithm of \citet{dempster1977} is the
 fundamental tool for this task, and arguably the most important paper
 in the field after \citet{rubin1976}. Its logic mirrors the structure
 of the problem: the E-step computes the conditional expectation of the
 complete-data log-likelihood given the observed data and the current
-parameters, and the M-step maximizes it. The paper proved that each
+parameters, and the M-step maximises it. The paper proved that each
 iteration increases the observed likelihood, unified a large number of
 pre-existing special-purpose schemes, and named the method. The
 convergence theory was completed by \citet{wu1983}, who fixed a flaw
@@ -193,7 +193,7 @@ information matrix, standard errors require extra work;
 \citet{louis1982} showed how to recover them from complete-data
 quantities. Among the many refinements that followed, the ECM and
 ECME algorithms \citep{meng1993, liu1994} replace the M-step with
-cheaper conditional maximizations; \citet{mclachlan2008} is the
+cheaper conditional maximisations; \citet{mclachlan2008} is the
 standard book-length treatment.
 
 For our purposes the relevant instance is EM for the mean vector and
@@ -205,8 +205,10 @@ and, as a by-product, conditional-expectation imputations. Since
 daily returns are decidedly non-Gaussian \citep{cont2001}, the robust
 variant matters: \citet{little1988} derived EM for the multivariate
 Student-$t$, whose E-step simply downweights outlying observations,
-and \citet{liu1995} made its estimation practical via ECME. This is
-the version we implement in Chapter~\ref{ch:methodology}.
+and \citet{liu1995} made its estimation practical via ECME. The
+implementation used in Chapter~\ref{ch:methodology} is the Gaussian one;
+the robust variant is discussed there as the natural refinement, and
+Chapter~\ref{ch:conclusion} returns to it.
 
 The time series counterpart of this machinery is the state-space
 framework. The Kalman filter \citep{kalman1960} accommodates missing
@@ -225,7 +227,7 @@ the general theory.
 \subsection{From multiple imputation to machine learning}
 \label{sec:lit_ml}
 
-On the applied side, the 1990s and 2000s standardized imputation
+On the applied side, the 1990s and 2000s standardised imputation
 practice. \citet{schafer1997} provided workable algorithms for
 multiple imputation under joint multivariate models, and the chained
 equations approach of \citet{vanbuuren2011} replaced the joint model
@@ -236,7 +238,7 @@ standard in biostatistics and the social sciences.
 
 In parallel, a more algorithmic tradition developed methods that
 dispense with an explicit probability model. $k$-nearest-neighbours
-imputation was popularized by \citet{troyanskaya2001} for gene
+imputation was popularised by \citet{troyanskaya2001} for gene
 expression data and transfers directly to return panels: a missing
 entry is filled with a weighted average of the corresponding entries
 of similar rows (dates, in our case); random forests followed
@@ -261,7 +263,7 @@ uses conditional score-based diffusion, producing a full predictive
 distribution for the missing values rather than a point estimate,
 which is why we select it as our generative representative.
 \citet{deeplearning_survey2024} survey this rapidly growing area, and
-\citet{missingsignals2024} bridge it with the signal processing
+\citet{missingsignals2025} bridge it with the signal processing
 literature.
 
 Two caveats recur across this literature. First, essentially all deep
@@ -291,7 +293,7 @@ staggered publication lags (the so-called ragged edge).
 extract factors from large unbalanced panels; \citet{mariano2003}
 treated quarterly GDP as a monthly series with two out of three values
 missing, estimated in state-space form; \citet{giannone2008}
-formalized nowcasting, where the Kalman filter absorbs data releases
+formalised nowcasting, where the Kalman filter absorbs data releases
 as they arrive; and \citet{doz2012} and \citet{banbura2014} developed
 maximum likelihood estimation of large factor models under arbitrary
 missingness patterns, essentially scaling \citet{shumway1982} to
@@ -326,7 +328,7 @@ makes for return panels: what matters is not the imputation error
 itself but its effect on the downstream object of interest. Finally,
 \citet{wasserstein2021} highlight a specifically financial pitfall:
 imputing with a model trained on the full sample leaks future
-information into the imputed values, and they formalize the resulting
+information into the imputed values, and they formalise the resulting
 trade-off between look-ahead bias and imputation variance.
 
 Summing up, the statistical literature provides the taxonomy of
@@ -396,12 +398,13 @@ The thesis is organised around four questions.
     naive baseline.
 
     \item The empirical findings themselves, among them that pointwise and
-    structural quality can diverge by close to an order of magnitude, that the
-    neural models do not improve on EM at a computational cost several orders
-    of magnitude higher, that every conditional imputer inflates the factor
-    structure of the panel because the values it inserts are conditional
-    means, and that the ranking of the methods is least stable exactly where
-    the data is missing not at random.
+    structural quality can diverge by close to an order of magnitude, that in
+    this experiment the neural models do not improve on EM at a computational
+    cost several orders of magnitude higher, that under the tested MCAR
+    configurations every conditional imputer inflates the factor structure of
+    the panel, as point imputations built from conditional location estimates
+    are expected to, and that the ranking of the methods is least stable
+    exactly where the data is missing not at random.
 \end{enumerate}
 
 \section{Outline of the thesis}

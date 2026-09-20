@@ -10,44 +10,53 @@ seven methods, and scored both against the truth directly and through two models
 a user would build on the result. We return to the four questions of
 Section~\ref{sec:questions}.
 
-The mechanism matters more than the amount. Under the two random patterns the
-methods hold up even when a third of the panel is gone: at sparse rate $0.3$ the
-market factor is still recovered to within a degree and a half of the true one.
-Under the stressed pattern, which removes turbulent dates, the same methods
-break down at far smaller shares of missing data. At the heaviest level none
-brings the relative covariance error below $0.6$, the first principal component
-falls from $41.74\%$ to about $25\%$, and the realised portfolios end at little
-more than half of the oracle's cumulative return, with the five imputers
-indistinguishable from one another. What has been deleted there is not a random
-part of the sample but the part that carries the covariance structure, and no
-model can recover from the observed panel what the observed panel does not
-contain. A comparable share of missing cells is not a comparable problem.
+In this experiment the mechanism mattered more than the amount. Under the two
+random patterns the methods hold up even when a third of the panel is gone: at
+sparse rate $0.3$ the market direction is still recovered to within a degree and
+a half of the true one. Under the stressed pattern the same methods break down at
+far smaller shares of missing data. At the heaviest level none of them brings the
+relative covariance error below $0.6$, the first principal component falls from
+$41.74\%$ to about $25\%$, and the portfolios end at little more than half of
+the oracle's cumulative return, with the five imputers indistinguishable from one
+another. What has been deleted there is not a random part of the sample but the
+part that carries the covariance structure, and none of the methods tested could
+reconstruct from the observed panel what the observed panel no longer contains.
+Two qualifications belong with that reading. The stressed pattern changes the
+selection rule and the geometry of the missingness at the same time, deleting
+preferentially on turbulent dates and deleting date by date across assets, so the
+present design does not separate the contribution of the two; and the comparison
+rests on a single panel and one run per configuration. Within those limits, a
+comparable share of missing cells was not a comparable problem.
 
-The deep models do not earn their cost. EM is rarely beaten in the metric tables
-and never by a wide margin, CSDI matches it, and BRITS falls behind at two of
-the stressed levels. EM fills a panel in about a second, while CSDI needs some
+The deep models did not earn their cost here. EM is rarely beaten in the metric
+tables and never by a wide margin, CSDI matches it, and BRITS falls behind at two
+of the stressed levels. EM fills a panel in about a second, while CSDI needs some
 twenty-four minutes of sampling after four hours of training, four orders of
 magnitude more for a reconstruction that is not better. The comparison is tied
 to the training budget and the hardware of Section~\ref{sec:costs}, but the size
 of the gap leaves a good deal of room before the conclusion would turn.
 
 Pointwise accuracy is a poor proxy for the quality of an imputed panel. Under
-the MCAR patterns the MAE of mean replacement is only about fifty percent worse
+the MCAR patterns the MAE of zero imputation is only about fifty percent worse
 than the best, while its covariance error is close to an order of magnitude
 worse than EM's, so a method can look acceptable entry by entry and still
 distort the geometry of the panel. The distortion is also systematic rather than
-noisy. Every conditional imputer raises the share of variance carried by the
-first factor, from $41.74\%$ to between $45.6\%$ and $48.5\%$ at sparse rate
-$0.3$, because the value it inserts is a conditional mean and therefore lies
-closer to the dominant directions of the panel than a real return does. The more
-entries are filled, the more the panel comes to look like its own factor model,
-and no pointwise metric registers this.
+noisy. Under the tested MCAR configurations every conditional imputer raises the
+share of variance carried by the first factor, from $41.74\%$ to between $45.6\%$
+and $48.5\%$ at sparse rate $0.3$, because the value it inserts is a conditional
+location estimate and therefore lies closer to the dominant directions of the
+panel than a real return does. The more entries are filled, the more the panel
+comes to look like its own factor model, and no pointwise metric registers this.
+This is a property of filling with point estimates rather than with draws, so it
+should be expected to persist for point imputation generally, but the evidence
+here is for these methods under these patterns.
 
 The rankings largely survive downstream, and the exceptions carry the most
 information. Low-rank completion is among the most accurate methods entry by
 entry and has the largest five-factor subspace distance at ten of the fifteen
 levels, reaching $0.39$ at sparse rate $0.3$ against $0.21$ for EM, since
-truncating the spectrum discards exactly the weakly separated middle directions.
+truncating the spectrum discards exactly those weakly separated directions inside
+the leading subspace.
 Complete-case deletion reads as merely inefficient in the metric tables and
 produces allocations whose Sharpe ratio falls to almost zero at sparse rate
 $0.1$ and whose mean return turns negative at the gap level $(1000,\,20)$. The
@@ -74,15 +83,23 @@ the differences reported here. The missingness is injected rather than observed,
 so its mechanism is known and stationary, whereas real gaps arise from halts,
 delistings and illiquidity and follow no law the experimenter can write down; the
 stressed pattern is a stylised form of MNAR and not a model of any particular
-cause. Each configuration was run once, so the tables carry no estimate of
-sampling variation around the numbers they report. The two downstream evaluations
+cause; and because it deletes preferentially on turbulent dates and does so date
+by date across assets, the selection rule and the date-aligned geometry it
+induces are not separated by this design. Each configuration was run once, so the
+tables carry no estimate of sampling variation around the numbers they report.
+The EM results are those of the Gaussian model, so the comparison with the neural
+imputers is a comparison with a classical estimator that was not given the robust
+Student-$t$ treatment its heavy-tailed data would justify. The two downstream evaluations
 both read the covariance matrix, which makes them complementary but not
-independent tests. Finally, all seven methods are smoothers. BRITS reads the
-panel in both directions and CSDI conditions on every observed value, so the
-results describe reconstruction after the fact and not what would be available to
-a user filling a gap in real time, with only the past in hand.
+independent tests, and the portfolio evaluation is in sample, a diagnostic of
+reconstruction fidelity rather than a statement about investment performance.
+Finally, the experiments are run in an offline reconstruction setting in which
+every method may use full-sample information. BRITS reads the panel in both
+directions and CSDI conditions on every observed value, so the results describe
+reconstruction after the fact and not what would be available to a user filling a
+gap in real time, with only the past in hand.
 
-\section{Future Work}
+\section{Future work}
 
 The last of those limitations is the natural continuation. Restricting each
 imputer to the information available up to the date being filled turns the
@@ -95,10 +112,10 @@ that does not pass through the covariance would test parts of the reconstruction
 that neither of the present evaluations reaches. A third is to carry the
 uncertainty of the imputation forward instead of discarding it. CSDI produces a
 predictive distribution that we collapsed to a median, and the inflation of the
-factor structure documented above is precisely the artefact that averaging
-conditional means creates, so a multiple-imputation treatment in which the
-downstream decision sees the spread rather than a point estimate should correct
-it. Beyond these, the same design applies directly to larger cross sections,
+factor structure documented above is the artefact that filling with point
+estimates would be expected to create, so a multiple-imputation treatment in
+which the downstream decision sees the spread rather than a point estimate is the
+natural test of that explanation. Beyond these, the same design applies directly to larger cross sections,
 lower frequencies and other asset classes, and eventually to panels whose gaps
 are real rather than injected, where the mechanism has to be inferred rather
 than assumed.

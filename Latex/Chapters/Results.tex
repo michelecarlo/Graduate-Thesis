@@ -5,7 +5,7 @@ Tables~\ref{tab:results_sparse}, \ref{tab:results_gaps}
 and~\ref{tab:results_stressed} report the seven evaluation metrics of
 Section~\ref{sec:eval} for every model, one table per injection pattern of
 Section~\ref{sec:missingness}. Within each table the levels are ordered by
-their realized share of missing cells, and within each level the best value
+their realised share of missing cells, and within each level the best value
 of every metric is set in bold. A dash marks a value that is not defined.
 This happens for the pointwise errors of Deletion, since the panel it
 returns changes shape, for its remaining metrics at the heaviest levels,
@@ -23,8 +23,8 @@ That EM is so hard to beat is less surprising than it first looks. Daily
 returns are close to serially uncorrelated, so nearly everything that can be
 known about a missing entry is carried by the returns observed on the same
 date, and the conditional mean of Section~\ref{sec:models} extracts exactly
-that. What is left over is idiosyncratic and no model can predict it. The
-pointwise columns therefore have a floor, and it is reached almost at once:
+that. What is left over is idiosyncratic, and little of it is predictable from
+anything else in the panel. The pointwise columns therefore have a floor, and it is reached almost at once:
 EM's MAE stays between $0.0071$ and $0.0080$ across the whole sparse table,
 and the five conditional methods are separated in the third decimal. The
 additional capacity of BRITS and CSDI has little to act on, since the
@@ -103,10 +103,10 @@ The deleted returns are not a random draw but the largest ones, so a model
 fitted to the calm surviving sample fills turbulent dates with calm values and
 has nothing to tell it otherwise. The error sits in the target rather than in
 the estimator, which is why the stressed table degrades in a way that no amount
-of model capacity addresses. At the heaviest level no method brings the
-relative covariance error below $0.6$; the turbulent dates are simply no longer
-in the data, and nothing in the observed sample allows any model to recover
-them.
+of model capacity addresses. At the heaviest level none of the methods tested
+brings the relative covariance error below $0.6$; the turbulent dates are no
+longer in the data, and the observed sample appears to carry too little about
+them for any of these models to reconstruct.
 
 This is also what separates the two levels at which BRITS falls behind,
 $(0,\, 0.1,\, 0.99)$ and $(0.05,\, 0.5,\, 0.9)$, the two whose deleted entries
@@ -136,7 +136,7 @@ are informative only while there is something left in the panel to recover.
 \begin{table}[p]
   \centering
   \footnotesize
-  \caption{Evaluation scores under sparse missingness (MCAR); levels are the deletion rate $r$.}
+  \caption[Evaluation scores under sparse missingness]{Evaluation scores under sparse missingness (MCAR); levels are the deletion rate $r$. MAE, RMSE, VaRErr and WassErr are in daily log-return units, CovErr is a relative Frobenius error and AbsACFErr and LevErr are in correlation units; an entry shown as $0.0000$ is smaller than $5\times 10^{-5}$.}
   \label{tab:results_sparse}
   \begin{tabular}{llrrrrrrr}
     \toprule
@@ -188,7 +188,7 @@ are informative only while there is something left in the panel to recover.
 \begin{table}[p]
   \centering
   \footnotesize
-  \caption{Evaluation scores under contiguous-gap missingness (MCAR); levels are the parameters $(n, \lambda)$ of Section~\ref{sec:missingness}.}
+  \caption[Evaluation scores under contiguous-gap missingness]{Evaluation scores under contiguous-gap missingness (MCAR); levels are the number of seeds and the mean run length $(n, \ell)$ of Section~\ref{sec:missingness}. MAE, RMSE, VaRErr and WassErr are in daily log-return units, CovErr is a relative Frobenius error and AbsACFErr and LevErr are in correlation units; an entry shown as $0.0000$ is smaller than $5\times 10^{-5}$.}
   \label{tab:results_gaps}
   \begin{tabular}{llrrrrrrr}
     \toprule
@@ -241,7 +241,7 @@ are informative only while there is something left in the panel to recover.
   \centering
   \footnotesize
   \setlength{\tabcolsep}{4.5pt}
-  \caption{Evaluation scores under stressed missingness (MNAR); levels are the parameters $(r, h, p)$ of Section~\ref{sec:missingness}.}
+  \caption[Evaluation scores under stressed missingness]{Evaluation scores under stressed missingness (MNAR); levels are the parameters $(r, h, p)$ of Section~\ref{sec:missingness}. MAE, RMSE, VaRErr and WassErr are in daily log-return units, CovErr is a relative Frobenius error and AbsACFErr and LevErr are in correlation units; an entry shown as $0.0000$ is smaller than $5\times 10^{-5}$.}
   \label{tab:results_stressed}
   \begin{tabular}{llrrrrrrr}
     \toprule
@@ -295,20 +295,27 @@ are informative only while there is something left in the panel to recover.
 
 We now turn to the downstream evaluation of Section~\ref{sec:portfolio}. For
 every imputed panel, and for the uncorrupted one, we estimate the tangency
-portfolio and realise it on the true returns. Tables~\ref{tab:portfolio_sparses},
-\ref{tab:portfolio_gaps} and~\ref{tab:portfolio_stressed} report its annualised
-mean, variance and Sharpe ratio, together with the gross distance
-$\lVert \Delta w \rVert_1$ between the estimated weights and the oracle's. The
-oracle is the same in every row, with an annualised mean of $0.361$, a variance
-of $0.049$ and a Sharpe ratio of $1.636$. Since it is the best in-sample
-allocation, no imputation can beat its Sharpe, and the only question is how close
-each one comes. The two naive baselines are kept out of the tables and discussed
-at the end, so that the comparison stays among the imputation methods themselves.
+portfolio and evaluate it on the true returns.
+Tables~\ref{tab:portfolio_sparses}, \ref{tab:portfolio_gaps}
+and~\ref{tab:portfolio_stressed} report the annualised mean, variance and Sharpe
+ratio of the resulting weighted log-return series, together with the $L^1$ weight
+distance $\lVert \Delta w \rVert_1$ between the estimated weights and the
+oracle's. The oracle is the same in every row, with an annualised mean of
+$0.361$, a variance of $0.049$ and a Sharpe ratio of $1.636$.
+
+The exercise is in sample throughout: the weights and the returns they are
+evaluated on come from the same period, so the oracle is the best allocation
+available and no imputation can beat its Sharpe. What the tables measure is
+reconstruction fidelity, how close an imputed panel brings a mean-variance
+optimiser to the decision the complete panel would have supported, and they
+should not be read as evidence about out-of-sample investment performance. The
+two naive baselines are kept out of the tables and discussed at the end, so that
+the comparison stays among the imputation methods themselves.
 
 \begin{table}[htbp]
   \centering
   \footnotesize
-  \caption{Optimal-portfolio evaluation under sparse missingness. Realised annualised mean, variance and Sharpe ratio of the tangency portfolio estimated from each panel, together with $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data.}
+  \caption[Optimal-portfolio evaluation under sparse missingness]{Optimal-portfolio evaluation under sparse missingness. Annualised mean, variance and Sharpe ratio of the weighted log-return series obtained by applying to the true returns the tangency weights estimated from each panel, together with the $L^1$ weight distance $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data. The comparison is in sample and diagnoses reconstruction fidelity, not investment performance.}
   \label{tab:portfolio_sparses}
   \begin{tabular}{llrrrr}
     \toprule
@@ -355,7 +362,7 @@ at the end, so that the comparison stays among the imputation methods themselves
 \begin{table}[htbp]
   \centering
   \footnotesize
-  \caption{Optimal-portfolio evaluation under contiguous-gap missingness. Realised annualised mean, variance and Sharpe ratio of the tangency portfolio estimated from each panel, together with $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data.}
+  \caption[Optimal-portfolio evaluation under contiguous-gap missingness]{Optimal-portfolio evaluation under contiguous-gap missingness. Annualised mean, variance and Sharpe ratio of the weighted log-return series obtained by applying to the true returns the tangency weights estimated from each panel, together with the $L^1$ weight distance $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data. The comparison is in sample and diagnoses reconstruction fidelity, not investment performance.}
   \label{tab:portfolio_gaps}
   \begin{tabular}{llrrrr}
     \toprule
@@ -402,7 +409,7 @@ at the end, so that the comparison stays among the imputation methods themselves
 \begin{table}[htbp]
   \centering
   \footnotesize
-  \caption{Optimal-portfolio evaluation under stressed missingness. Realised annualised mean, variance and Sharpe ratio of the tangency portfolio estimated from each panel, together with $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data.}
+  \caption[Optimal-portfolio evaluation under stressed missingness]{Optimal-portfolio evaluation under stressed missingness. Annualised mean, variance and Sharpe ratio of the weighted log-return series obtained by applying to the true returns the tangency weights estimated from each panel, together with the $L^1$ weight distance $\lVert \hat w - \hat w_{\text{True}}\rVert_1$, and the oracle estimated on the uncorrupted data. The comparison is in sample and diagnoses reconstruction fidelity, not investment performance.}
   \label{tab:portfolio_stressed}
   \begin{tabular}{llrrrr}
     \toprule
@@ -449,14 +456,14 @@ at the end, so that the comparison stays among the imputation methods themselves
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{Figures/portfolio_realizations.pdf}
-  \caption{Realised cumulative log return of the tangency portfolio at the heaviest level of each missingness pattern. The oracle, estimated on the uncorrupted panel, is drawn in black; the five imputers are estimated on the corrupted panels and realised on the same true returns. Under the two MCAR patterns (left, centre) the imputed portfolios drift above the oracle by taking on more risk, while under the MNAR stressed pattern (right) they fall short of it. The two baselines, off the vertical scale, are omitted.}
+  \caption[Cumulative weighted log return of the tangency portfolio]{Cumulative weighted log return of the tangency portfolio at the heaviest level of each missingness pattern. The oracle, estimated on the uncorrupted panel, is drawn in black; the five imputers are estimated on the corrupted panels and evaluated on the same true returns, so the exercise is in sample throughout and the series are linear portfolio-return proxies rather than the log returns of self-financing portfolios. Under the two MCAR patterns (left, centre) the imputed portfolios drift above the oracle by taking on more risk, while under the stressed pattern (right) they fall short of it. The two baselines, off the vertical scale, are omitted.}
   \label{fig:portfolio_realizations}
 \end{figure}
 
 At the lightest levels there is nothing to separate them. Under sparse
 missingness at rate $0.001$, and under the shortest gaps, every imputer
-reproduces the oracle Sharpe to within a thousandth and moves the weights by
-less than $0.35$ in gross terms. The gap opens only as the missingness grows,
+reproduces the oracle Sharpe to within a thousandth and moves the weights by an
+$L^1$ distance of less than $0.35$. The gap opens only as the missingness grows,
 and even then the five methods stay close to one another, with no single model
 leading throughout: CSDI is marginally ahead on the light sparse levels, EM and
 low-rank completion on the gaps, EM again on most of the stressed levels, and
@@ -495,7 +502,7 @@ Section~\ref{sec:eval}: under MNAR the information needed to rebuild the
 portfolio is missing from the observed panel, and no imputer can supply it.
 
 The baselines show, from below, how much the imputation matters once a model is
-built on top of it. Mean replacement trails the conditional methods at almost
+built on top of it. Zero imputation trails the conditional methods at almost
 every level, the exception being the very heaviest, where its heavy damping of
 the covariance, a liability everywhere else, accidentally restrains the
 over-leverage that afflicts the others. Complete-case deletion is worse, and in a
@@ -504,8 +511,13 @@ the surviving dates alone leaves it so far from the truth that the optimiser
 levers into unstable portfolios: the realised variance is already more than three
 times the oracle's at sparse rate $0.05$, the Sharpe falls to almost zero at rate
 $0.1$, and at the gap level $(1000,\,20)$ the portfolio's mean return turns
-negative. At the heaviest levels deletion cannot be evaluated at all, too few
-complete dates surviving to estimate a covariance. A method that reads as merely
+negative. These last figures should be read with the caveat of
+Section~\ref{sec:portfolio}: by then the complete-case sample has fewer dates
+than assets, so its covariance matrix is singular, no ordinary inverse exists,
+and the weights are fixed by numerical noise in the near-zero eigenvalues rather
+than by any estimate the data supports. They record the breakdown rather than
+measure it. At the heaviest levels deletion cannot be evaluated at all, too few
+complete dates surviving to attempt a covariance. A method that reads as merely
 inefficient in the metric tables can, once it feeds a portfolio, produce an
 allocation that is dangerously unstable.
 
@@ -527,7 +539,7 @@ among the imputation methods themselves.
 \begin{table}[htbp]
   \centering
   \footnotesize
-  \caption{Factor-structure evaluation under sparse missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors.}
+  \caption[Factor-structure evaluation under sparse missingness]{Factor-structure evaluation under sparse missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors. $D_1$ and $D_5$ measure how well each subspace is recovered as a whole and are not per-factor errors.}
   \label{tab:factors_sparses}
   \begin{tabular}{llrrrr}
     \toprule
@@ -574,7 +586,7 @@ among the imputation methods themselves.
 \begin{table}[htbp]
   \centering
   \footnotesize
-  \caption{Factor-structure evaluation under contiguous-gap missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors.}
+  \caption[Factor-structure evaluation under contiguous-gap missingness]{Factor-structure evaluation under contiguous-gap missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors. $D_1$ and $D_5$ measure how well each subspace is recovered as a whole and are not per-factor errors.}
   \label{tab:factors_gaps}
   \begin{tabular}{llrrrr}
     \toprule
@@ -621,7 +633,7 @@ among the imputation methods themselves.
 \begin{table}[htbp]
   \centering
   \footnotesize
-  \caption{Factor-structure evaluation under stressed missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors.}
+  \caption[Factor-structure evaluation under stressed missingness]{Factor-structure evaluation under stressed missingness. Share of the panel variance carried by the first principal component and by the first five, and normalised subspace distance between the estimated and the true leading eigenspaces at one and five factors. $D_1$ and $D_5$ measure how well each subspace is recovered as a whole and are not per-factor errors.}
   \label{tab:factors_stressed}
   \begin{tabular}{llrrrr}
     \toprule
@@ -668,7 +680,7 @@ among the imputation methods themselves.
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{Figures/factor_structure.pdf}
-  \caption{Factor structure at the heaviest level of each missingness pattern. Top: share of the panel variance carried by each of the first fifteen principal components, on a logarithmic scale, with the uncorrupted panel in black. Bottom: the fifteen principal angles between the true and the estimated fifteen-factor spaces, in increasing order. The leading directions are recovered to within a few degrees by every method, and the rotation grows with the depth of the factor.}
+  \caption[Factor structure at the heaviest level of each pattern]{Factor structure at the heaviest level of each missingness pattern. Top: share of the panel variance carried by each of the first fifteen principal components, on a logarithmic scale, with the uncorrupted panel in black. Bottom: the fifteen principal angles between the true and the estimated fifteen-factor subspaces, in increasing order; here the horizontal index enumerates the ordered principal angles and not the individual factors, so $\theta_i$ should not be read as the error of the $i$-th principal component. The best-aligned directions the two subspaces share are recovered to within a few degrees by every method, while the worst-aligned ones are not.}
   \label{fig:factor_structure}
 \end{figure}
 
@@ -677,25 +689,34 @@ $0.3$, where a third of the panel is gone, $D_1$ stays below $0.026$ for every
 method, an angle of less than a degree and a half between the estimated market
 factor and the true one. The five-factor space is a different matter: at the
 same level $D_5$ runs from $0.14$ to $0.39$, between six and eighteen times
-larger. The damage is not spread evenly over the leading factors but
-concentrated at the point where the spectrum stops separating them. The fifth
-and sixth true eigenvalues carry $2.77\%$ and $2.41\%$ of the variance, close
-enough that little in the data distinguishes their directions, and it is exactly
-there that the imputations diverge. At sparse rate $0.3$ the first four
-directions are recovered to within about six degrees by KNN, EM, BRITS and CSDI,
-while their fifth is off by between $16.5$ and $31.4$ degrees. The angle profiles in
-Figure~\ref{fig:factor_structure} show the same thing over a longer range: the
-rotation stays small through the first eight or ten factors and then climbs
-steeply.
+larger. Widening the subspace from one dimension to five therefore costs a great
+deal, and the misalignment within it is concentrated in a single direction rather
+than shared out evenly. At sparse rate $0.3$ the four smallest principal angles
+between the true and the estimated five-factor subspaces stay within about six
+degrees for KNN, EM, BRITS and CSDI, while the largest of the five runs between
+$16.5$ and $31.4$ degrees. What this locates is a direction inside the leading
+five-dimensional space that the imputations fail to place, not a defect of the
+fifth principal component as such. A plausible reason is that the spectrum stops
+separating the components there: the fifth and sixth true eigenvalues carry
+$2.77\%$ and $2.41\%$ of the variance, close enough that little in the data
+pins down the plane they span, and a subspace cut through directions that the
+data barely distinguishes is the part hardest to recover. The angle profiles in
+Figure~\ref{fig:factor_structure} show the same shape over a longer range: the
+smaller principal angles stay small and the profile climbs steeply only in its
+last few entries.
 
-The spectrum is distorted in a consistent direction. Every conditional imputer
-raises the weight of the first factor, from $41.74\%$ to between $45.6\%$ and
-$48.5\%$ at sparse rate $0.3$, and raises the five-factor share from $60.02\%$
-to between $61.2\%$ and $69.3\%$. The reason is visible in what these methods
-do. An imputed value is a conditional mean, a combination of the assets observed
-on the same date, so it lies closer to the dominant directions of the panel than
-a real return does, and the more entries are filled the more the panel comes to
-look like its own factor model. The top row of
+The spectrum is distorted in a consistent direction. Under the tested MCAR
+configurations every conditional imputer raises the weight of the first factor,
+from $41.74\%$ to between $45.6\%$ and $48.5\%$ at sparse rate $0.3$, and raises
+the five-factor share from $60.02\%$ to between $61.2\%$ and $69.3\%$. This is
+what point imputation would lead one to expect. Each filled value is a
+conditional location estimate formed from the assets observed on the same date,
+so it carries less idiosyncratic variation than a real return and lies closer to
+the dominant directions of the panel, and the more entries are filled the more
+the panel comes to look like its own factor model. The effect is a property of
+inserting point estimates rather than draws, and we observe it here for these
+methods under these patterns; a multiple-imputation treatment that preserved the
+predictive spread would not be expected to show it in the same form. The top row of
 Figure~\ref{fig:factor_structure} shows the effect across the whole spectrum:
 under the two MCAR patterns the imputed curves sit above the true one at the
 head and below it in the tail. A downstream user reading these panels would
@@ -708,22 +729,24 @@ heaviest, reaching $0.39$ under sparse missingness at rate $0.3$ and $0.33$ at
 the stressed level $(0.05,\,0.5,\,0.9)$, against $0.21$ and $0.08$ for EM at the
 same levels. Its five-factor variance share is also the most inflated, $69.3\%$
 against a true $60.0\%$. The direction of this result is worth stating plainly,
-because it is the opposite of what the method's construction would suggest. Low
-rank completion is the one imputer that explicitly imposes a factor structure,
+because it is the opposite of what the method's construction would suggest.
+Low-rank completion is the one imputer that explicitly imposes a factor
+structure,
 and an evaluation of factor structure might be expected to favour it. What
 happens instead is that truncating the spectrum removes precisely the weakly
-separated middle directions: at sparse rate $0.3$ its fifth factor is rotated by
-$55.8$ degrees, where the worst of the other methods is at $31.4$. It recovers
-the market factor as well as anyone and pays for it deeper down.
+separated middle directions: at sparse rate $0.3$ the largest principal angle
+between its five-factor subspace and the true one is $55.8$ degrees, where the
+worst of the other methods reaches $31.4$. It recovers the market direction as
+well as anyone and pays for it deeper into the subspace.
 
 BRITS fails once, and the failure is informative. At the stressed level
-$(0.05,\,0.5,\,0.9)$ its $D_1$ is $0.141$, an angle of eight degrees on the
-leading factor, where the other four methods stay between $0.023$ and $0.040$,
-under two and a half degrees. This is the same level at which its portfolio Sharpe
+$(0.05,\,0.5,\,0.9)$ its $D_1$ is $0.141$, an angle of eight degrees between the
+estimated and the true market direction, where the other four methods stay
+between $0.023$ and $0.040$, under two and a half degrees. This is the same level at which its portfolio Sharpe
 collapsed to $1.30$ in Table~\ref{tab:portfolio_stressed} while EM and CSDI held
 above $1.50$. The portfolio evaluation registered that something had gone wrong
 but could not say what; the factor evaluation locates it, in a rotation of the
-market factor itself, which no amount of care further down the spectrum can
+market direction itself, which no amount of care further down the spectrum can
 compensate.
 
 At the most extreme stressed level the ranking dissolves and all the methods
@@ -737,11 +760,12 @@ not a random part of the panel but the part that carries the factor structure.
 The right-hand column of Figure~\ref{fig:factor_structure} shows every imputed
 spectrum lying flatter than the truth. This is the same conclusion the portfolio
 reached at this level, and the same one the covariance error of
-Section~\ref{sec:eval} reached before it: under MNAR the information is not in
-the observed panel, so no method can recover it and none of them separate.
+Section~\ref{sec:eval} reached before it: under this stressed pattern the
+information appears not to be recoverable from the observed panel, and none of
+the methods tested here separate.
 
-The baselines fail in opposite directions, which is itself instructive. Mean
-replacement dilutes the factor structure rather than concentrating it, taking
+The baselines fail in opposite directions, which is itself instructive. Zero
+imputation dilutes the factor structure rather than concentrating it, taking
 the first component down to $30.6\%$ at sparse rate $0.3$ and to $18.1\%$ at the
 extreme stressed level, since a constant inserted in place of a return is
 uncorrelated with everything else in the cross section. Complete-case deletion

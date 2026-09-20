@@ -5,9 +5,12 @@ As already mentioned, missing data can arise in countless different ways,
 and the choice of methodology depends on the nature of the missingness, the type of data,
 and the specific goals of the analysis. We will focus on a subset
 of cases, namely those that involve imputation of the missing values with
-"information" from the whole dataset (no causal constraint), with in mind
-the goal of training a downstream model that is as close as possible to
-the one that would have been trained on the complete dataset.
+information drawn from the whole dataset, with the goal in mind of training a
+downstream model that is as close as possible to the one that would have been
+trained on the complete dataset. The setting is therefore an offline
+reconstruction one: no causal constraint is imposed, and every method is free
+to use the full sample, including observations that fall after the date being
+filled.
 Our choice of data, models, and evaluation methods will be guided
 by these constraints. We will nevertheless mention when/how models should
 be tweaked to solve adjacent problems.
@@ -16,37 +19,52 @@ be tweaked to solve adjacent problems.
 \label{sec:data}
 
 As our main baseline, we chose the most studied and reliable dataset in finance:
-the end-of-day prices of the S\&P500, in this case fetched with yfinance from
-1/1/2010 to 30/5/2026. It clearly is not a dataset inflicted
-with the curse of missing data; the only structural ones being occasional circuit breaks
-and listings/delistings from the index. To obtain a full dataset with no "real"
+the end-of-day prices of the S\&P~500 constituents, fetched with yfinance from
+1/1/2010 to 30/5/2026. This is not a series that suffers badly from missing
+data; the only structural gaps are occasional circuit breaks and listings or
+delistings from the index. To obtain a full dataset with no "real"
 missing data, we removed each stock that contained at least one missing observation.
 Furthermore, we selected a sample of 50 stocks from the index, stratified across industries;
 this is a sensible choice because:
 \begin{enumerate}
-    \item with more 400 stocks the covariance matrix $\bSigma$ quickly becomes unreliable (noisy covariances,
-    skewed eigenvalues, unstable inversion\dots) as the number of observations shrinks;
-    \item it is easier to check whether the ground data is actually correct;
-    \item model training requires considerably less memory, in a time where RAM and GPU prices are 
-    skyrocketing;
-    \item it is well known that a well constructed portfolio with more than 30 stocks is already
-    sufficiently diversified (since volatility scales with the inverse of the square root of the number of securities).
+    \item with more than 400 stocks the covariance matrix $\bSigma$ quickly becomes
+    unreliable (noisy covariances, skewed eigenvalues, unstable inversion) as the
+    ratio of observations to assets falls;
+    \item it is easier to verify that the reference data is actually correct;
+    \item model training requires considerably less memory and computing time;
+    \item a cross section of fifty assets is already wide enough to behave like a
+    realistic multi-asset problem, with a market factor, industry structure and a
+    substantial amount of diversifiable idiosyncratic risk, rather than a handful
+    of series.
 \end{enumerate}
 
 This dataset will serve as the ground truth against which we will compare our results.
 In parallel, we will modify it by inserting fake missing observations according to different
 rules, as we define in the subsequent sections.
 
-Now an important choice is whether to operate in the prices "space" $P_t$ or the log returns space $R_t$.
-There are positives and negatives about each. For one, the raw dataset is prices, and
-in practice missing data will mostly come in the form of missing prices. Furthermore,
-in most applications we care slightly more about prices than returns, since the formers are
-what is actually bought and sold.
-But $P_t$ has the drawback of not being a complete space ($p_{t,k} > 0 $) and being highly level dependant,
-making the series non-stationary and very difficult for ML algorithms to handle.
-We will thus focus on $R_t$.
+An important choice is whether to operate in the price space $P_t$ or in the log
+return space $R_t$. There are advantages and disadvantages to each. The raw
+dataset is prices, and in practice missing data mostly arrives as missing
+prices; in most applications we also care slightly more about prices than
+returns, since the former are what is actually bought and sold. But $P_t$ is
+constrained to the positive half-line ($p_{t,k} > 0$) and is strongly level
+dependent, which makes the series non-stationary and difficult for machine
+learning algorithms to handle. We therefore work in $R_t$.
 
-\subsection{Missingness Injection}
+This choice carries an abstraction that is worth stating plainly, because the
+motivation of Section~\ref{sec:motivation} is phrased in terms of prices while
+the experiments below are not. The objects we delete and reconstruct are
+entries of the return panel, not prices. Deleting a return is a stylised
+representation of a missing price rather than a literal one: carrying a price
+forward across a gap corresponds to a zero return over that gap, which the zero
+imputation of Section~\ref{sec:zero} reproduces exactly, but a real stale price
+is also followed by a catch-up return once quoting resumes, which absorbs the
+move that was never recorded. Working in return space suppresses that catch-up
+effect, so the results below should be read as statements about the return
+panel a downstream model consumes, not as a full model of how stale prices
+propagate.
+
+\subsection{Missingness injection}
 \label{sec:missingness}
 
 We used three algorithms to simulate different missingness patterns:
@@ -54,38 +72,84 @@ We used three algorithms to simulate different missingness patterns:
 \begin{enumerate}
     \item \textbf{Sparse}: each scalar $r_{t,k}$ is missing with probability $r$, independent of the rest
     of the dataset. This is the easiest example of MCAR and can simulate a randomly corrupted dataset;
-    \item \textbf{Contiguous gaps}: $n$ points $r_{t,k}$ are chosen at random and eliminated. Then subsequent observations
-    of the same variable $r_{t+1,k}$, \dots, $r_{t+h,k}$ get deleted according to an exponential decay
-    with rate $\lambda$. This is still an example of MCAR and can be thought to simulate assets
-    failing to trade because of random shortages of liquidity;
-    \item \textbf{Stressed}: we calculate index squared returns for each date $t$ and rank them. Then,
-    returns whose date is above a certain percentile $p$get deleted with probability $h$, while the rest
-    still go missing with rate $r$. This simulates shortages of liquidity or circuit breaks that happen
-    when markets experience high levels of volatility; since the missingness of a given
-    $r_{t,k}$ is injected conditional on all the other values of the dataset, this is an example of MNAR.
+    \item \textbf{Contiguous gaps}: $n$ seed cells $r_{t,k}$ are drawn uniformly at
+    random, and each seed is extended forward into a run
+    $r_{t,k}, r_{t+1,k}, \dots, r_{t+L-1,k}$ of the same asset, whose length $L$ is
+    drawn from an exponential distribution with mean $\ell$ and rounded down to a
+    whole number of trading days. The second parameter of a gap level is therefore
+    the mean run length $\ell$, measured in trading days, and not a decay rate; a
+    level is written $(n, \ell)$ throughout. Runs are drawn independently and may
+    overlap, so the realised share of missing cells is slightly below $n\ell/(TN)$.
+    This is still an example of MCAR and simulates assets failing to trade because
+    of random shortages of liquidity;
+    \item \textbf{Stressed}: for each date $t$ we form the equally weighted average
+    log return of the fifty sampled assets, $\bar{r}_t = N^{-1}\sum_k r_{t,k}$, which
+    serves as our market proxy, and score the date by its square $\bar{r}_t^2$. This
+    is what we mean by the index squared return: no external index series is used,
+    the proxy is built from the panel itself. Dates whose score falls at or above
+    the $p$ quantile of that score are declared stressed, and on those dates every
+    entry is deleted independently with probability $h$, while on the remaining
+    dates entries are deleted with probability $r$. A level is written $(r, h, p)$.
+    This simulates the shortages of liquidity and the circuit breaks that occur when
+    markets are volatile.
+
+    The scoring statistic is computed on the complete panel, and the values it
+    depends on are then among those hidden from the imputer. The market proxy is
+    not retained as a separately observed series either: on a stressed date the
+    imputer sees only the entries that survived, from which $\bar{r}_t$ cannot be
+    recovered. Relative to the information set actually available to the imputation
+    methods, the mechanism is therefore non-ignorable, and we treat it throughout as
+    a stylised MNAR pattern. We note that the same construction would be MAR
+    conditional on the score if that score were handed to the imputer as a fully
+    observed covariate; it is the fact that it is not, rather than anything about
+    the functional form, that makes the pattern non-ignorable here.
     
 \end{enumerate}
 
 \begin{figure}
   \centering
   \includegraphics[width=\textwidth]{Figures/missingness_examples.pdf}
-  \caption{Missingness Examples}
+  \caption[Examples of the three missingness patterns]{Examples of the three
+  missingness patterns on the sampled panel. Each marker is a deleted entry,
+  with dates on the vertical axis and assets on the horizontal one. Sparse
+  missingness (left) removes isolated cells, contiguous gaps (centre) remove
+  runs of consecutive dates within a single asset, and the stressed pattern
+  (right) removes entries preferentially on the most volatile dates, which
+  aligns the deletions into horizontal bands across the cross section.}
   \label{fig:missingness}
 \end{figure}
 
-For each of the three missingness patterns, we will vary the parameters $r$, $\lambda$, and $h$ to
-simulate different levels of missingness. Furthermore, we will make it so that the ratio of missing
-values is the same for each level of missingness in each pattern, so that we can compare the performance
-of the different imputation methods in a sensible way.
-The exact values of the parameters are reported in Table \ref{tab:missingness_params}. The column "Rate"
-reports the expected value of the missigness ratio for each pattern.
+For each of the three patterns we vary the parameters above to obtain five levels
+of missingness. The levels are chosen so that the expected share of missing cells
+is the same at the corresponding level of each pattern, which is what allows the
+three sets of results to be compared row block by row block: any difference
+between them is attributable to the mechanism rather than to the amount of data
+removed. The exact values are reported in Table~\ref{tab:missingness_params},
+whose last column gives the expected missingness ratio common to the three
+patterns at that level.
 
-\begin{figure}
+\begin{table}[htbp]
   \centering
-  \includegraphics[width=\textwidth]{Figures/missingness_table.pdf}
-  \caption{Missingness parameters}
+  \caption[Missingness parameters]{Parameters of the three injection mechanisms at
+  the five levels. Sparse levels are the per-cell deletion probability $r$; gap
+  levels are the number of seeds $n$ and the mean run length $\ell$ in trading
+  days; stressed levels are the background rate $r$, the deletion probability $h$
+  on stressed dates and the quantile $p$ of the score above which a date counts as
+  stressed. The last column is the expected share of missing cells, which the
+  levels are matched on.}
   \label{tab:missingness_params}
-\end{figure}
+  \begin{tabular}{cccc}
+    \toprule
+    Sparse ($r$) & Gaps ($n, \ell$) & Stressed ($r, h, p$) & Expected rate \\
+    \midrule
+    $0.001$ & $(20,\, 10)$   & $(0,\, 0.1,\, 0.99)$      & $0.001$ \\
+    $0.01$  & $(200,\, 10)$  & $(0.005,\, 0.5,\, 0.99)$  & $0.01$  \\
+    $0.05$  & $(1000,\, 10)$ & $(0.04,\, 0.2,\, 0.95)$   & $0.05$  \\
+    $0.1$   & $(1000,\, 20)$ & $(0.05,\, 0.5,\, 0.9)$    & $0.1$   \\
+    $0.3$   & $(2000,\, 30)$ & $(0.2,\, 1,\, 0.9)$       & $0.3$   \\
+    \bottomrule
+  \end{tabular}
+\end{table}
 
 
 
@@ -107,22 +171,26 @@ dates are exactly the turbulent ones, so the surviving subsample is calm by
 construction and every risk measure computed from it is biased downwards, no
 matter how much data is left.
 
-\subsection{Mean Replacement}
+\subsection{Zero imputation}
+\label{sec:zero}
 
-The simplest imputation that preserves the shape of the panel consists in
-setting each missing return to its unconditional expected value. This is almost equivalent to setting the missing price
-to be equal to the last observed price, since daily returns are very close to zero.
-The mean of the panel is preserved, but every second moment is damped:
-under sparse missingness at rate $r$, a variance term survives whenever its
+The simplest imputation that preserves the shape of the panel sets every missing
+return to zero. Since daily log returns have a mean of essentially zero, this is
+also the unconditional location estimate to within a negligible amount, and it is
+exactly the reconstruction implied by carrying the last observed price forward
+across the gap. The tables of Chapter~\ref{ch:results} report it under the name
+Zero.
+
+Its failure mode is predictable in closed form. Every second moment is damped:
+under sparse missingness at rate $r$, a variance term survives whenever its own
 entry is observed while a covariance term needs both entries at once, so
 estimated volatilities scale by $\sqrt{1-r}$ and pairwise correlations by
-$(1-r)$, shrinking the covariance matrix towards its diagonal. Under the
-stressed pattern the distortion is stronger still, because the entries being
-replaced are on average the largest ones. This predictable failure is
-precisely what the structural metrics of Section~\ref{sec:eval} are designed
-to expose.
+$(1-r)$, shrinking the covariance matrix towards its diagonal. Under the stressed
+pattern the distortion is stronger still, because the entries being replaced are
+on average the largest ones. This is precisely the failure the structural metrics
+of Section~\ref{sec:eval} are designed to expose.
 
-\subsection{Low Rank Matrix Completion}
+\subsection{Low-rank matrix completion}
 
 A few pervasive factors describe most of the covariance of equity returns,
 so the return panel is close to a low-rank matrix plus idiosyncratic noise.
@@ -139,7 +207,7 @@ reconstruction estimated on the fly, without ever specifying the factors.
 The nuclear-norm variant of the same algorithm, which soft-thresholds the
 singular values instead of truncating them, shrinks every imputed entry
 towards zero and thereby inherits a milder version of the covariance damping
-of mean replacement; we therefore keep the hard rank constraint, with $q$
+of zero imputation; we therefore keep the hard rank constraint, with $q$
 small, in line with the number of pervasive equity factors.
 
 \subsection{EM}
@@ -160,20 +228,26 @@ $\bSigma_{mm} - \bSigma_{mo}\bSigma_{oo}^{-1}\bSigma_{om}$ of the cells just
 filled -- the correction that separates EM from naively iterating a
 regression fill, which would understate the covariance. At convergence we
 obtain the maximum likelihood estimate $(\hat{\bmu}, \hat{\bSigma})$ and, as
-a by-product, imputations that are exactly the $L^2$ projections discussed
-in Section~\ref{geometry}. In the implementation, dates sharing the same
+a by-product, imputations that are conditional expectations, and therefore the
+fills that minimise the expected squared error given the observed part of the
+date. In the implementation, dates sharing the same
 missingness pattern are grouped together, so each pattern costs a single
-linear solve per iteration. Daily returns are of course heavier-tailed than
-the Gaussian assumption wants; the same iteration extends to a multivariate
-Student-$t$, whose E-step gains a per-date weight, decreasing in the
-Mahalanobis distance of the observed block, that discounts extreme dates in
-the update of $(\bmu, \bSigma)$ \citep{little1988, liu1995}.
+linear solve per iteration. A small ridge term is added to the covariance and to
+each observed block before it is inverted, which keeps the solves stable without
+materially shrinking the estimate. Daily returns are of course heavier-tailed
+than the Gaussian assumption wants; the same iteration extends to a multivariate
+Student-$t$, whose E-step gains a per-date weight, decreasing in the Mahalanobis
+distance of the observed block, that discounts extreme dates in the update of
+$(\bmu, \bSigma)$ \citep{little1988, liu1995}. That robust variant is not used
+here: all EM results reported in Chapter~\ref{ch:results} come from the Gaussian
+model described above, and the Student-$t$ extension is noted only as the natural
+next refinement.
 
-\subsection{KNN}
+\subsection{$k$-nearest-neighbour imputation}
 
-$k$-nearest-neighbours imputation, first popularised on gene-expression data
+$k$-nearest-neighbour imputation, first popularised on gene-expression data
 by \citet{troyanskaya2001}, is the donor-based, fully non-parametric member
-of our set. To fill date $t$, its distance to every other date is computed
+of our set; the tables of Chapter~\ref{ch:results} report it as KNN. To fill date $t$, its distance to every other date is computed
 as the Euclidean distance over the assets both dates observe, rescaled by
 the number of co-observed assets so that sparser rows are not mechanically
 favoured; the missing return $r_{t,i}$ is then the inverse-distance-weighted
@@ -217,12 +291,14 @@ given the rest. At inference the chain starts from noise on the missing
 cells, with the observed ones held fixed throughout, and each pass produces
 one draw from the predictive distribution of the missing block given the
 observed panel; the final imputation is the median over several draws. CSDI
-is thus the one genuinely probabilistic model of our set -- the dispersion
-of its draws is a built-in estimate of the imputation uncertainty, which no
-other model here provides.
+is thus the method from which we explicitly generate multiple conditional draws:
+the dispersion of its draws is a built-in estimate of the imputation uncertainty,
+which no other model here exposes. EM also defines a probabilistic conditional
+model, and could be sampled from in the same way, but we use it only through its
+conditional mean.
 
 
-\section{Evaluation Methods}
+\section{Evaluation methods}
 \label{sec:eval}
 
 Every experiment produces, for a given missingness pattern and level, an
@@ -240,7 +316,7 @@ computed from the two full panels, and measure whether the objects that
 downstream models actually consume (covariances, tail quantiles, marginal
 distributions, temporal dependence) survive the imputation. The two families need
 not agree: a method can be nearly optimal pointwise and still destroy the
-second-moment structure, as mean replacement shows. Deletion is the
+second-moment structure, as zero imputation shows. Deletion is the
 exception in what follows: it returns a panel with fewer rows, so the
 pointwise metrics are not defined for it and the structural ones are
 computed on the surviving subsample.
@@ -260,11 +336,11 @@ computed on the surviving subsample.
     = \left( \frac{1}{|\mathcal{M}|} \sum_{(t,k) \in \mathcal{M}}
       \left( \hat{r}_{t,k} - r_{t,k} \right)^2 \right)^{1/2} .
     \]
-    This is the sample counterpart of the $L^2$ distance of
-    Section~\ref{geometry}: the imputation minimising its expectation is the
-    conditional expectation given the observed data, so RMSE rewards exactly
-    the projections that the likelihood-based models construct, while
-    penalising large errors quadratically.
+    This is the sample counterpart of the corresponding $L^2$ loss: the
+    imputation minimising its expectation is the conditional expectation given
+    the observed data, so RMSE rewards exactly the conditional means that the
+    likelihood-based models construct, while penalising large errors
+    quadratically.
 
     \item \textbf{Covariance error}: the relative Frobenius error of the
     sample covariance matrix,
@@ -274,10 +350,12 @@ computed on the surviving subsample.
            {\lVert \bSigma \rVert_F} ,
     \]
     where $\bSigma$ and $\widehat{\bSigma}$ are estimated from the true and
-    the imputed panel respectively. This is our central structural metric:
-    the covariance matrix is the object whose geometry
-    (Section~\ref{geometry}) we set out to preserve, and the input of
-    essentially every allocation and risk model built downstream.
+    the imputed panel respectively. This is our central structural metric: the
+    covariance matrix is the structural object this thesis sets out to
+    preserve, and the input of essentially every allocation and risk model
+    built downstream. Being a relative Frobenius error, it weighs the large
+    entries of $\bSigma$ most, so it is dominated by the variances and by the
+    factor-driven covariances.
 
     \item \textbf{Value-at-Risk error}: for each asset the empirical VaR at
     level $\alpha = 0.05$ is the (sign-flipped) empirical $\alpha$-quantile
@@ -311,7 +389,7 @@ computed on the surviving subsample.
     invariant to a permutation of the dates; the last two are not. Daily
     returns are themselves close to serially uncorrelated, but their
     absolute values are persistently and positively autocorrelated --
-    volatility clustering, the most robust temporal stylized fact of asset
+    volatility clustering, the most robust temporal stylised fact of asset
     returns \citep{cont2001}. Writing $\hat{\rho}_k(\cdot)$ for the sample
     autocorrelation at lag $k$, we compare the autocorrelation functions of
     the absolute returns up to a horizon $K$,
@@ -376,29 +454,54 @@ the highest ratio of expected return to volatility:
 \]
 Short positions are allowed, as in the unconstrained classical problem. The
 covariance enters through its inverse, so any distortion the imputation leaves
-in $\hat{\bSigma}$, the very object Section~\ref{geometry} set out to preserve,
-is carried into the weights and often amplified there. The portfolio is in this
-sense a direct stress test of the structural quality that the covariance error
-of Section~\ref{sec:eval} measures in the aggregate.
+in $\hat{\bSigma}$, the central structural object evaluated above, is carried
+into the weights and often amplified there. The portfolio is in this sense a
+direct stress test of the structural quality that the covariance error of
+Section~\ref{sec:eval} measures in the aggregate.
+
+In the implementation $\hat{\bSigma}$ is the plain sample covariance of the panel
+supplied, and $\hat{\bSigma}^{-1}\hat{\bmu}$ is obtained by an ordinary linear
+solve. No pseudoinverse, shrinkage or ridge regularisation is applied. For the
+full-panel imputers this is unproblematic, since $T \gg N$ and the sample
+covariance is comfortably of full rank. It is not unproblematic for complete-case
+deletion at the heavier levels, where the surviving subsample has fewer dates
+than assets: there the sample covariance is singular, no ordinary inverse exists,
+and the linear solve returns a direction determined by numerical noise in the
+near-zero eigenvalues. The deletion rows at those levels should accordingly be
+read as a record of the breakdown, not as meaningful allocations, and we treat
+them that way in Chapter~\ref{ch:results}.
 
 We compute $\hat{w}$ once for every imputed panel and once for the uncorrupted
 panel. To judge an allocation we do not trust the panel it was estimated on: we
-realise each weight vector on the true returns,
+evaluate each weight vector on the true returns,
 \[
 r^{p}_t = r_t^\top \hat{w} ,
 \]
 and report the annualised mean and variance of the resulting series $r^{p}$,
 together with its Sharpe ratio, annualising with $252$ trading days and taking a
-zero risk-free rate. The portfolio built on the true panel is the oracle: it is
-the best in-sample allocation available, and every imputation is judged by how
-close its realised moments, and its weights, come to it. A method that preserves
-the second-moment geometry recovers weights near the oracle and a comparable
-realised mean and variance. One that distorts that geometry, or that discards
-data as complete-case deletion does, produces weights that look optimal on the
-panel it saw and perform poorly once confronted with the real returns. The
-comparison is reported in Chapter~\ref{ch:results}, in a table of realised
-moments and a plot of the realised series, kept apart from the metric tables
-above.
+zero risk-free rate. Since the components of $r_t$ are log returns, $r^p_t$ is a
+weighted log-return series rather than the log return of a self-financing
+portfolio, which would require weights applied to simple returns and rebalancing;
+we use it as a linear portfolio-return proxy and nothing in what follows depends
+on the difference.
+
+Two points about what this exercise does and does not measure. First, the weights
+and the returns they are evaluated on come from the same period, so the whole
+comparison is in sample. The portfolio built on the true panel is the oracle: it
+is the best in-sample allocation available, and no imputation can beat it. What
+the exercise measures is reconstruction fidelity, how close an imputed panel
+leads a mean-variance optimiser to the decision the complete panel would have
+produced, and it is a diagnostic of that and not evidence about out-of-sample
+investment performance. Second, we report the distance between the estimated and
+the oracle weights as $\lVert \hat{w} - \hat{w}_{\text{True}} \rVert_1$, which we
+call the $L^1$ weight distance; it is a measure of disagreement between two
+allocations and not the gross exposure of either. A method that preserves the
+second-moment structure recovers weights near the oracle and comparable realised
+moments. One that distorts that structure, or that discards data as complete-case
+deletion does, produces weights that look optimal on the panel it saw and behave
+poorly on the real returns. The comparison is reported in
+Chapter~\ref{ch:results}, in a table of realised moments and a plot of the
+realised series, kept apart from the metric tables above.
 
 \subsubsection{Factor structure}
 \label{sec:factors}
@@ -430,17 +533,25 @@ the panel into fewer factors than the data support or spread it over more. The
 second is the position of the factor space itself. Let $V_k$ be the true
 loadings and let $\theta_1 \le \dots \le \theta_k$ be the principal angles
 between the two subspaces, the cosines of which are the singular values of
-$V_k^\top \hat V_k$. We summarise them by
+$V_k^\top \hat V_k$. These angles describe how the two $k$-dimensional subspaces
+sit relative to one another as a whole. They are ordered alignment angles between
+the two spans, obtained from a decomposition that recombines the eigenvectors
+freely, so $\theta_i$ is not the error of the $i$-th principal component and
+cannot be attached to any individual factor: $\theta_1$ measures the
+best-aligned direction the two subspaces share and $\theta_k$ the worst aligned
+one, whatever linear combinations of loadings those directions turn out to be.
+This is exactly what makes the criterion invariant to the sign of each
+$\hat v_i$ and to any reordering among factors of nearly equal variance, both of
+which are arbitrary. We summarise the angles by
 \[
 D_k = \frac{1}{\sqrt{k}}
       \left( \sum_{i=1}^{k} \sin^2 \theta_i \right)^{1/2} \in [0,1] ,
 \]
 the root mean square of their sines, which is $0$ when the two factor spaces
-coincide and $1$ when they are orthogonal. Comparing subspaces rather than
-individual eigenvectors makes the criterion invariant to the sign of each
-$\hat v_i$ and to any reordering among factors of nearly equal variance, both of
-which are arbitrary. Dividing by $\sqrt{k}$ keeps the values comparable across
-different numbers of factors.
+coincide and $1$ when they are orthogonal. Dividing by $\sqrt{k}$ keeps the
+values comparable across different numbers of factors. $D_k$ is therefore a
+measure of how well the $k$-dimensional factor subspace is recovered as a whole,
+and that is the only reading we give it.
 
 The two downstream evaluations are connected by the same decomposition. Since
 $\hat{\bSigma}^{-1} = \sum_i \hat\lambda_i^{-1} \hat v_i \hat v_i^\top$, the
@@ -448,8 +559,10 @@ inverse on which the portfolio of Section~\ref{sec:portfolio} depends weights
 each direction by the reciprocal of its variance, so it is dominated by the
 eigenvectors carrying the smallest eigenvalues. These are the directions
 supported by the least data, and the ones an imputation has the least
-information to recover. Reporting $D_k$ as $k$ grows therefore says how deep
-into the spectrum an imputation remains trustworthy, which is what the portfolio
-implicitly relies on. We report $D_k$ at $k=1$ and $k=5$ together with the
+information to recover. Comparing $D_k$ at a larger $k$ with $D_k$ at a smaller
+one therefore says how much is lost once the deeper part of the spectrum is
+included in the subspace to be recovered, which is what the portfolio implicitly
+relies on. We report $D_1$, the recovery of the market direction, and $D_5$, the
+recovery of the five-dimensional leading factor subspace, together with the
 variance shares, and plot the full spectrum and angle profile, in
 Chapter~\ref{ch:results}.

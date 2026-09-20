@@ -57,6 +57,7 @@
 
 %%─── Hyperlinks (load before cleveref, after most packages) ──────────────────
 \usepackage[hidelinks]{hyperref}
+\hypersetup{pdfauthor={Michele Carlo Fanelli}}
 \usepackage[capitalize, noabbrev]{cleveref}
 
 %%─── Headers & footers ───────────────────────────────────────────────────────
@@ -72,6 +73,19 @@
   \fancyfoot[C]{\thepage}%
   \renewcommand{\headrulewidth}{0pt}%
 }
+
+%%─── Blank verso pages inserted by \cleardoublepage carry no header/number ───
+%% (equivalent to the emptypage package, which is not in this installation)
+\makeatletter
+\def\cleardoublepage{%
+  \clearpage
+  \if@twoside
+    \ifodd\c@page\else
+      \hbox{}\thispagestyle{empty}\newpage
+      \if@twocolumn\hbox{}\newpage\fi
+    \fi
+  \fi}
+\makeatother
 
 %%─── Epigraph (manual implementation; epigraph.sty not in basic install) ────
 \newcommand{\epigraph}[2]{%
@@ -141,7 +155,7 @@
 
 
 %%━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-%% FRONT MATTER — Acknowledgements
+%% FRONT MATTER — Abstract
 %%━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 \thispagestyle{empty}
 \null
@@ -151,17 +165,14 @@
 \null
 \clearpage
 
-%% --- Acknowledgements page -------------------------------------------------
+%% --- Abstract page ---------------------------------------------------------
 \thispagestyle{empty}
 \vspace*{\fill}
-\begin{center}
-	{\Large\itshape Acknowledgements}
-\end{center}
 \vspace{2em}
 \begin{center}
 \begin{minipage}{0.8\textwidth}
-\itshape
-....
+\textit{I want to thank my family for the continued support throughout university,
+and any friend I met during my time at Bocconi.}
 \end{minipage}
 \end{center}
 \vspace*{\fill}
