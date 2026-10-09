@@ -52,7 +52,7 @@
 \setlength{\leftmargini}{1.1em}
 
 \newif\ifbackup
-\providecommand{\mainframecount}{15}
+\providecommand{\mainframecount}{12}
 \makeatletter
 \newcommand{\recordmainframes}{\write\@auxout{\string\gdef\string\mainframecount{\the\c@framenumber}}}
 \makeatother
@@ -126,153 +126,79 @@
 \section{Introduction}
 
 \begin{frame}[t]{Financial data is never fully observed}
-\note{Gaps are everywhere in finance. The default fixes are not neutral: stale prices bias betas, deletion throws away data, a constant fill damps correlations. The literature mostly scores imputations cell by cell; this thesis scores them by what a user builds on the result.}
+\note{Gaps are everywhere: order-book feeds drop quotes, trading halts, OTC bond tenors go unquoted for days, macro data arrive at mixed frequencies. The default fixes are not neutral: carrying the last price forward biases betas (Scholes and Williams, 1977), dropping incomplete dates is unbiased only under MCAR and loses much of the sample, a constant fill damps variances and correlations. Deep imputers assume MAR, usually implicitly through their masked training objective, and evaluation is almost always pointwise. Aim: score each imputation on its reconstruction accuracy and on the downstream model built on it, against the same model fitted on the complete panel. The four questions structure the results; each gets its answer at the end.}
 \begin{columns}[T,onlytextwidth]
-\begin{column}{0.315\textwidth}
-\begin{block}{Where data goes missing}
-\footnotesize
-\begin{minipage}[t][36mm][t]{\linewidth}
-\begin{itemize}
-  \item Order-book feeds drop quotes in bursts of cancellations
-  \item Trading halts when prices move too violently
-  \item OTC bond tenors go unquoted for days
-  \item Macro data arrive at mixed frequencies, with lags
-\end{itemize}
-\end{minipage}
-\end{block}
+\begin{column}{0.38\textwidth}
+{\tiny\color{muted}THE PROBLEM}\par\vskip2.5mm
+\small\textbf{Gaps are everywhere}\par
+{\scriptsize\color{muted}halts, dropped quotes, illiquid tenors}\par\vskip3mm
+\textbf{The usual fixes distort risk}\par
+{\scriptsize\color{muted}stale prices, lost dates, damped correlations}\par\vskip3mm
+\textbf{Evaluation is pointwise}\par
+{\scriptsize\color{muted}MAE or RMSE on the masked cells only}\par
 \end{column}
-\begin{column}{0.315\textwidth}
-\begin{block}{The usual fixes distort risk}
-\footnotesize
-\begin{minipage}[t][36mm][t]{\linewidth}
-\begin{itemize}
-  \item Carrying the last price forward: stale prices bias betas {\color{muted}(Scholes and Williams, 1977)}
-  \item Dropping incomplete dates: unbiased only under MCAR, and much of the sample is lost
-  \item Filling with a constant: variances and correlations are damped, even under MCAR
-\end{itemize}
-\end{minipage}
-\end{block}
-\end{column}
-\begin{column}{0.315\textwidth}
-\begin{block}{What is left open}
-\footnotesize
-\begin{minipage}[t][36mm][t]{\linewidth}
-\begin{itemize}
-  \item Deep imputers assume MAR, usually implicitly through their masked training objective
-  \item Evaluation is almost always pointwise, RMSE or MAE on masked cells, which says little about the covariance structure
-\end{itemize}
-\end{minipage}
-\end{block}
+\begin{column}{0.58\textwidth}
+{\tiny\color{muted}RESEARCH QUESTIONS}\par\vskip2.5mm
+\begin{tikzpicture}[q/.style={rectangle, rounded corners=2pt, fill=tint, text width=36mm,
+    minimum height=18mm, inner sep=2.2mm, anchor=north west, align=left, font=\small}]
+  \node[q] at (0,0)        {{\color{accent}\Large\bfseries 1}\par\vskip0.8mm\textbf{Mechanism or amount?}};
+  \node[q] at (42mm,0)     {{\color{accent}\Large\bfseries 2}\par\vskip0.8mm\textbf{Do deep imputers earn their cost?}};
+  \node[q] at (0,-20.5mm)  {{\color{accent}\Large\bfseries 3}\par\vskip0.8mm\textbf{Is pointwise accuracy a good proxy?}};
+  \node[q] at (42mm,-20.5mm) {{\color{accent}\Large\bfseries 4}\par\vskip0.8mm\textbf{Do rankings survive downstream?}};
+\end{tikzpicture}
 \end{column}
 \end{columns}
-\vskip3mm
+\vfill
 \begin{block}{}
-\small\textbf{Aim of the thesis.} Evaluate each imputation on its reconstruction accuracy and on the downstream model built on it, against the same model fitted on the complete panel.
+\small\textbf{Aim.} Score each imputation on reconstruction \emph{and} on the model built on it, against an oracle fitted on the complete panel.
 \end{block}
-\end{frame}
-
-\begin{frame}[t]{Four research questions}
-\note{These four questions structure the results. Keep this slide short and come back to it at the end, where each question gets its answer.}
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.485\textwidth}
-\begin{enumerate}
-  \item \textbf{Mechanism or amount?}\\
-  {\footnotesize What drives the damage, the share of missing data or the mechanism that produced it, at comparable shares?}
-  \vskip2.5mm
-  \item \textbf{Do the deep imputers earn their cost?}\\
-  {\footnotesize Recurrent and diffusion models against classical likelihood and low-rank estimators, with training and sampling time counted.}
-\end{enumerate}
-\end{column}
-\begin{column}{0.485\textwidth}
-\begin{enumerate}\setcounter{enumi}{2}
-  \item \textbf{Is pointwise accuracy a good proxy?}\\
-  {\footnotesize Does a method that fills the holes accurately also preserve covariances, tails, marginals and temporal dependence?}
-  \vskip2.5mm
-  \item \textbf{Do the rankings survive downstream?}\\
-  {\footnotesize Is the ordering given by reconstruction metrics the ordering given by decisions taken on the imputed panel?}
-\end{enumerate}
-\end{column}
-\end{columns}
-\vskip4mm
-{\color{rulec}\hrule}
 \vskip2mm
-{\tiny\color{muted}CONTRIBUTIONS}\par\vskip1mm
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.315\textwidth}\scriptsize
-{\color{accent}\bfseries Controlled testbed}\\
-Fifty S\&P~500 stocks, three mechanisms at five severities, seven imputers in one framework.
-\end{column}
-\begin{column}{0.315\textwidth}\scriptsize
-{\color{accent}\bfseries Evaluation suite}\\
-Past reconstruction error: covariance, Value-at-Risk, Wasserstein, volatility clustering and leverage.
-\end{column}
-\begin{column}{0.315\textwidth}\scriptsize
-{\color{accent}\bfseries Downstream evaluations}\\
-Tangency portfolio and factor structure, ranking imputers against each other and an oracle.
-\end{column}
-\end{columns}
 \end{frame}
 
 %%==========================================================================
 \section{Methodology}
 
-\newcommand{\stagecontent}[4]{%
-  \begin{minipage}[t][29mm][t]{29mm}\raggedright
-  {\color{accent}\bfseries #1}\enspace\textbf{#2}\par\vskip1.2mm
-  #3\par\vfill
-  {\color{ink}\bfseries #4}
+\newcommand{\stagecontent}[5]{%
+  \begin{minipage}[t][25mm][t]{29mm}\raggedright
+  {\color{accent}\bfseries #1}\enspace\textbf{#2}\par\vskip0.8mm
+  {\color{muted}#3}\par\vfill
+  {\fontsize{17}{19}\selectfont\bfseries\color{ink}#4}\par\vskip0.6mm
+  {\color{muted}#5}
   \end{minipage}}
 
 \begin{frame}[t]{A controlled experiment on a complete equity panel}
-\note{Start from a panel with no real missing data, delete entries under known rules, reconstruct, and compare with the truth. Returns rather than prices because prices are level dependent. Every method may use the full sample: this is reconstruction after the fact, not real-time filling.}
-\vskip1mm
+\note{Start from a panel with no real missing data: S\&P 500 end-of-day prices from 1/1/2010 to 30/5/2026, stocks with any missing price removed, 50 sampled across industries. Delete entries under known rules, reconstruct, compare with the truth. Returns rather than prices because prices are positive, level dependent and non-stationary; a deleted return is a stylised missing price (a carried-forward price is a zero return, but the later catch-up return is not modelled). Every method may use the full sample, including dates after the gap: this is reconstruction after the fact, not real-time filling.}
+\vskip3mm
 \centering
 \begin{tikzpicture}[node distance=4.6mm,
   stage/.style={rectangle, rounded corners=2pt, fill=tint, inner sep=2.2mm, font=\scriptsize},
   arr/.style={-{Stealth[length=2mm]}, ink!55, line width=0.9pt}]
-  \node[stage] (a) {\stagecontent{1}{Complete panel}{S\&P~500 end-of-day prices, 1/1/2010 to 30/5/2026. Stocks with any missing price removed; 50 sampled across industries.}{4125 $\times$ 50 panel}};
-  \node[stage, right=of a] (b) {\stagecontent{2}{Inject missingness}{Three mechanisms, two MCAR and one MNAR, five levels each, matched on the expected share of missing cells.}{15 corrupted panels}};
-  \node[stage, right=of b] (c) {\stagecontent{3}{Impute}{Seven methods, from deletion to conditional diffusion, run on every corrupted panel.}{105 runs (7 $\times$ 15)}};
-  \node[stage, right=of c] (d) {\stagecontent{4}{Evaluate}{Seven metrics against the true panel; two downstream models against an oracle fitted on it.}{7 metrics + 2 models}};
+  \node[stage] (a) {\stagecontent{1}{Complete panel}{50 S\&P~500 stocks, 2010 to 2026}{4125\,$\times$\,50}{daily log returns}};
+  \node[stage, right=of a] (b) {\stagecontent{2}{Inject}{3 mechanisms $\times$ 5 levels}{15}{corrupted panels}};
+  \node[stage, right=of b] (c) {\stagecontent{3}{Impute}{7 methods}{105}{imputed panels}};
+  \node[stage, right=of c] (d) {\stagecontent{4}{Evaluate}{against the truth and an oracle}{7\,+\,2}{metrics, downstream models}};
   \foreach \u/\v in {a/b,b/c,c/d}{\draw[arr] (\u.east) -- (\v.west);}
 \end{tikzpicture}
-\vskip5mm
-\raggedright
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.485\textwidth}
-\small\textbf{Returns, not prices}\par\vskip0.5mm
-{\footnotesize Prices are positive, level dependent and non-stationary, so the panel is in daily log returns. A deleted return is a stylised missing price: a carried-forward price is a zero return, but the later catch-up return is not modelled.}
-\end{column}
-\begin{column}{0.485\textwidth}
-\small\textbf{Offline reconstruction}\par\vskip0.5mm
-{\footnotesize Every method may use the full sample, including dates after the gap. The results describe reconstruction after the fact, not real-time filling.}
-\end{column}
-\end{columns}
+\vskip12mm
+{\small\begin{tabular}{@{}c@{\hspace{9mm}}c@{\hspace{9mm}}c@{\hspace{9mm}}c@{\hspace{9mm}}c@{}}
+\textbf{Daily log returns} & {\color{accent}\textbullet} & \textbf{Offline reconstruction} & {\color{accent}\textbullet} & \textbf{Known truth}\\[0.5mm]
+{\scriptsize\color{muted}not prices} & & {\scriptsize\color{muted}the full sample is available} & & {\scriptsize\color{muted}for every deleted cell}
+\end{tabular}\par}
 \end{frame}
 
 \begin{frame}[t]{Three mechanisms, matched on the share of missing cells}
-\note{Sparse removes isolated cells, gaps remove runs within one asset, stressed removes entries preferentially on the most volatile dates, so deletions line up across assets. Levels are matched on the expected share, so any difference between patterns is due to the mechanism. The stressed score is never shown to the imputer, which makes the pattern non-ignorable.}
+\note{Sparse removes isolated cells, each independently with probability r. Gaps: n seed cells, each extended forward into a run of mean length ell trading days, within one asset. Stressed: dates at or above the p-quantile of the squared panel-average return lose each entry with probability h, other dates with r; so deletions line up across assets on the most volatile dates. The score is never shown to the imputer, which makes the pattern non-ignorable. Levels are matched on the expected share, so differences between patterns are due to the mechanism.}
 \vskip-1.5mm
 \centering
-\includegraphics[width=0.655\textwidth]{missingness_examples.pdf}\par
-\vskip0.5mm
-\raggedright
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.315\textwidth}
-\scriptsize\textbf{Sparse} {\color{muted}(MCAR)}\\
-Each cell is deleted independently with probability $r$.
-\end{column}
-\begin{column}{0.315\textwidth}
-\scriptsize\textbf{Contiguous gaps} {\color{muted}(MCAR)}\\
-$n$ seed cells, each extended forward into a run with mean length $\ell$ trading days.
-\end{column}
-\begin{column}{0.315\textwidth}
-\scriptsize\textbf{Stressed} {\color{muted}(MNAR)}\\
-Dates at or above the $p$-quantile of the squared panel-average return lose each entry with probability $h$, other dates with $r$. The score is hidden from the imputer.
-\end{column}
-\end{columns}
-\vskip1.5mm
-{\tiny\setlength{\tabcolsep}{6.5pt}
+\includegraphics[width=0.68\textwidth]{missingness_examples.pdf}\par
+\vskip1mm
+{\small\begin{tabular}{@{}*{3}{>{\centering\arraybackslash}p{38mm}}@{}}
+\textbf{Sparse} {\color{muted}MCAR}\newline{\scriptsize\color{muted}isolated cells} &
+\textbf{Contiguous gaps} {\color{muted}MCAR}\newline{\scriptsize\color{muted}runs within one asset} &
+\textbf{Stressed} {\color{accent}MNAR}\newline{\scriptsize\color{muted}the most volatile dates}
+\end{tabular}\par}
+\vskip2mm
+{\centering\tiny\setlength{\tabcolsep}{6.5pt}
 \begin{tabular}{@{}ll*{5}{c}@{}}
 \toprule
 \multicolumn{2}{@{}l}{Expected share of missing cells} & 0.1\% & 1\% & 5\% & 10\% & 30\% \\
@@ -284,65 +210,42 @@ Stressed & $(r,h,p)$ & (0, 0.1, 0.99) & (0.005, 0.5, 0.99) & (0.04, 0.2, 0.95) &
 \end{tabular}\par}
 \end{frame}
 
-\begin{frame}[t]{Seven methods, from deletion to conditional diffusion}
-\note{Two baselines that the literature expects to fail, three classical estimators and two deep models. EM is the one to watch: its fill is the conditional expectation given the other assets on the same date, the fill that minimises the expected squared error under the Gaussian model.}
-\vskip-0.5mm
-{\scriptsize
-\renewcommand{\arraystretch}{1.55}\setlength{\tabcolsep}{4pt}
-\begin{tabular}{@{}G{19mm}>{\bfseries}L{14mm}L{80mm}>{\raggedright\arraybackslash\leavevmode\color{muted}\tiny}p{26mm}@{}}
+\begin{frame}[t]{Seven methods, scored on the whole panel}
+\note{Methods: Deletion drops every date with a missing value (Little and Rubin, 2019); Zero fills with 0, as if the price were carried forward; KNN is an inverse-distance average over the k nearest dates (Troyanskaya et al., 2001); Low-rank is iterative truncated SVD, a q-factor reconstruction (Mazumder et al., 2010); EM is Gaussian maximum likelihood with conditional-mean fill (Dempster et al., 1977); BRITS is a bidirectional RNN (Cao et al., 2018); CSDI is conditional score-based diffusion, median of 32 draws (Tashiro et al., 2021). EM is the one to watch: its fill is the conditional expectation given the other assets on the same date, the fill that minimises expected squared error. Metrics: pointwise ones look only at filled cells; the first five are invariant to permuting the dates, the temporal ones are not. Downstream: tangency portfolio w = Sigma^-1 mu / 1'Sigma^-1 mu, fitted on each panel, evaluated on the true returns, compared with the oracle (in sample); factor structure by variance shares and the subspace distance D_k between true and estimated leading eigenspaces.}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.47\textwidth}
+\vskip2mm
+{\tiny\color{muted}SEVEN IMPUTERS}\par\vskip1.5mm
+{\footnotesize\renewcommand{\arraystretch}{1.45}\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}G{19mm}L{47mm}@{}}
 \toprule
-Baselines & Deletion & Drop every date with a missing value (complete cases) & Little and Rubin (2019) \\
-          & Zero & Fill with 0, as if the price were carried forward & \\
-\midrule
-Classical & KNN & Inverse-distance average over the $k$ nearest dates & Troyanskaya et al.\ (2001) \\
-          & Low-rank & Iterative truncated SVD: a $q$-factor reconstruction & Mazumder et al.\ (2010) \\
-          & EM & Gaussian maximum likelihood, conditional-mean fill & Dempster et al.\ (1977) \\
-\midrule
-Deep learning & BRITS & Bidirectional RNN blending history and cross-section & Cao et al.\ (2018) \\
-              & CSDI & Conditional score-based diffusion; median of 32 draws & Tashiro et al.\ (2021) \\
+Baselines & \textbf{Deletion}, \textbf{Zero} \\
+Classical & \textbf{KNN}, \textbf{Low-rank}, {\color{emc}\textbf{EM}} \\
+Deep learning & \textbf{BRITS} {\color{muted}(RNN)}, \textbf{CSDI} {\color{muted}(diffusion)} \\
 \bottomrule
 \end{tabular}\par}
-\vskip3mm
+\vskip5mm
 \begin{block}{}
 \centering
 $\displaystyle \mathbb{E}\left[r_{t,m} \mid r_{t,o}\right] = \bm{\mu}_m + \bm{\Sigma}_{mo}\,\bm{\Sigma}_{oo}^{-1}\left(r_{t,o} - \bm{\mu}_o\right)$\\[1mm]
-{\scriptsize\color{muted}EM fill: the conditional mean given the assets observed on the same date, which minimises the expected squared error}
+{\scriptsize\color{muted}EM fill: conditional mean given same-date observations}
 \end{block}
-\end{frame}
-
-\begin{frame}[t]{Evaluating the panel, not only the filled cells}
-\note{Seven metrics in four families. Pointwise metrics look only at the filled cells, the others compare statistics of the whole panel, and the last two are the only ones that notice the order of the dates. The two downstream evaluations ask what a user would actually do with the panel.}
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.47\textwidth}
-\small\textbf{Seven metrics, four families}\par\vskip1.5mm
-{\scriptsize
-\renewcommand{\arraystretch}{1.35}\setlength{\tabcolsep}{3pt}
-\begin{tabular}{@{}G{14.5mm}>{\bfseries}L{16.5mm}L{34mm}@{}}
-\toprule
-Pointwise & MAE, RMSE & Error on the imputed cells only \\
-Marginal & VaRErr & 5\% Value-at-Risk, per asset \\
-         & WassErr & Wasserstein distance of the marginals \\
-Second moment & CovErr & $\lVert \hat{\bm\Sigma} - \bm\Sigma\rVert_F \,/\, \lVert \bm\Sigma\rVert_F$ \\
-Temporal & AbsACFErr & Volatility clustering, 20 lags \\
-         & LevErr & Leverage effect, $\mathrm{corr}(r_t, |r_{t+k}|)$ \\
-\bottomrule
-\end{tabular}\par}
-\vskip1.5mm
-{\scriptsize\color{muted}The first five are invariant to permuting the dates; the temporal ones are not.}
 \end{column}
 \begin{column}{0.49\textwidth}
-\small\textbf{Two downstream evaluations}\par\vskip1.2mm
-\begin{block}{Tangency portfolio}
-\scriptsize
-$\displaystyle \hat w = \frac{\hat{\bm\Sigma}^{-1}\hat{\bm\mu}}{\mathbf{1}^\top\hat{\bm\Sigma}^{-1}\hat{\bm\mu}}$\enspace fitted on each panel, evaluated on the true returns, compared with the oracle fitted on the complete panel (in sample).
-\end{block}
-\vskip-0.5mm
-\begin{block}{Factor structure}
-\scriptsize
-Variance shares $\hat\lambda_i/\sum_j\hat\lambda_j$ and subspace distance
-$\displaystyle D_k = \tfrac{1}{\sqrt{k}}\Big(\textstyle\sum_{i=1}^{k}\sin^2\theta_i\Big)^{1/2}\in[0,1]$
-between the true and estimated leading eigenspaces.
-\end{block}
+\vskip2mm
+{\tiny\color{muted}SEVEN METRICS, TWO DOWNSTREAM MODELS}\par\vskip1.5mm
+{\footnotesize\renewcommand{\arraystretch}{1.25}\setlength{\tabcolsep}{3pt}
+\begin{tabular}{@{}G{25mm}L{45mm}@{}}
+\toprule
+Pointwise & MAE, RMSE \\
+Marginal & VaRErr, WassErr \\
+Second moment & CovErr \\
+Temporal & AbsACFErr, LevErr \\
+\midrule
+Downstream & Tangency portfolio \\
+ & Factor structure, $D_k$ \\
+\bottomrule
+\end{tabular}\par}
 \end{column}
 \end{columns}
 \end{frame}
@@ -351,27 +254,27 @@ between the true and estimated leading eigenspaces.
 \section{Results}
 
 \begin{frame}[t]{Pointwise errors hit a floor at once, and EM sits on it}
-\note{Daily returns carry almost no serial information, so the best one can do for a missing entry is to read it off the other assets on the same date. EM does exactly that, so its pointwise error is flat and it is very hard to beat. The deep models have nothing extra to learn here.}
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.53\textwidth}
-\vskip-1mm
+\note{Daily returns are close to serially uncorrelated, so what can be known about a missing entry is carried by the other assets on the same date. EM's conditional mean extracts exactly that, so its MAE stays between 0.0071 and 0.0080 across all sparse levels. The five conditional methods are separated in the third decimal; the extra capacity of BRITS and CSDI has little to act on. The ranking is stable across patterns: EM is rarely beaten, and never by a wide margin.}
+\begin{columns}[c,onlytextwidth]
+\begin{column}{0.6\textwidth}
 \includegraphics[width=\linewidth]{mae_floor.pdf}
 \src{Sparse pattern, MAE on the imputed cells (Table 3.1).}
 \end{column}
-\begin{column}{0.44\textwidth}
-\footnotesize
-\begin{itemize}\setlength{\itemsep}{1.6mm}
-  \item Daily returns are close to serially uncorrelated: what can be known about a missing entry is carried by the other assets on the same date.
-  \item EM's conditional mean extracts exactly that. Its MAE stays between \kpi{0.0071} and \kpi{0.0080} across all sparse levels.
-  \item The five conditional methods are separated in the third decimal; the extra capacity of BRITS and CSDI has little to act on.
-  \item The ranking is stable across patterns: EM is rarely beaten, and never by a wide margin.
+\begin{column}{0.36\textwidth}
+{\tiny\color{muted}EM, MAE ACROSS SPARSE LEVELS}\par\vskip1mm
+{\fontsize{20}{22}\selectfont\bfseries\color{emc}0.0071 to 0.0080}\par\vskip5mm
+\small
+\begin{itemize}\setlength{\itemsep}{2mm}
+  \item Information is cross-sectional
+  \item Conditional methods differ in the third decimal
+  \item EM is rarely beaten
 \end{itemize}
 \end{column}
 \end{columns}
 \end{frame}
 
 \begin{frame}[t]{Accurate cells do not make an accurate panel}
-\note{Pointwise errors average over the filled cells, so they stay flat; the covariance error accumulates them, so it grows with the amount missing. Zero imputation shows the gap at its plainest: half again worse on MAE, nine times worse on covariance. Even among good methods the two families disagree: the best fill cell by cell damps the second moment most.}
+\note{MAE averages over the filled cells, so it stays flat; CovErr accumulates them over the panel, so it grows with the amount missing: EM's CovErr grows almost 40-fold while its MAE stays flat. Zero imputation shows the gap at its plainest: at sparse 0.3 its MAE is 1.5 times the best method's, its CovErr 8.9 times (ratios of Table 3.1 values). Even among good methods the families disagree: the best fill cell by cell is a conditional mean, less variable than the return it replaces; Low-rank loses to EM on MAE but beats it on CovErr at two stressed levels.}
 \begin{columns}[T,onlytextwidth]
 \begin{column}{0.49\textwidth}
 \centering\includegraphics[width=\linewidth]{coverr_growth.pdf}
@@ -380,191 +283,156 @@ between the true and estimated leading eigenspaces.
 \centering\includegraphics[width=\linewidth]{zero_ratio.pdf}
 \end{column}
 \end{columns}
-\vskip1mm
-\scriptsize
-\begin{itemize}\setlength{\itemsep}{0.6mm}
-  \item MAE averages over the filled cells, CovErr accumulates them over the panel: EM's CovErr grows almost 40-fold while its MAE stays flat.
-  \item At sparse 0.3, Zero's MAE is \kpi{1.5 times} the best method's and its CovErr \kpi{8.9 times} (ratios of Table 3.1 values).
-  \item The best fill cell by cell is a conditional mean, less variable than the return it replaces: Low-rank loses to EM on MAE but beats it on CovErr at two stressed levels.
-\end{itemize}
+\vskip2mm
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.315\textwidth}\centering
+{\Large\bfseries\color{ink}almost 40$\times$}\par\vskip0.5mm
+{\scriptsize\color{muted}growth of EM's CovErr, MAE flat}
+\end{column}
+\begin{column}{0.315\textwidth}\centering
+{\Large\bfseries\color{ink}1.5$\times$}\par\vskip0.5mm
+{\scriptsize\color{muted}Zero's MAE vs the best, sparse 0.3}
+\end{column}
+\begin{column}{0.315\textwidth}\centering
+{\Large\bfseries\color{accent}8.9$\times$}\par\vskip0.5mm
+{\scriptsize\color{muted}Zero's CovErr vs the best, sparse 0.3}
+\end{column}
+\end{columns}
 \end{frame}
 
 \begin{frame}[t]{The mechanism matters more than the amount}
-\note{Read the tables across at matched shares. Sparse and gaps are almost the same, because on every date the other assets are still there. The stressed pattern removes exactly those dates, and the returns it removes are the largest ones, so the error sits in the target and no model capacity fixes it.}
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.53\textwidth}
-\vskip-1mm
+\note{Read across at matched shares. Sparse and gaps are almost the same: with 49 other assets observed on each date, breaking the time axis costs a cross-sectional imputer little. The stressed pattern removes exactly those dates, aligned across assets, and the returns it removes are the largest ones, so the error sits in the target and no model capacity fixes it. BRITS falls behind where deletions are most extreme: MAE 0.0301 against EM's 0.0133 at (0, 0.1, 0.99). At (0.2, 1, 0.9) the ranking compresses: CovErr between 0.648 and 0.663 for every surviving model.}
+\begin{columns}[c,onlytextwidth]
+\begin{column}{0.56\textwidth}
 \includegraphics[width=\linewidth]{mechanism.pdf}
 \src{EM, covariance error by pattern at matched shares (Tables 3.1 to 3.3).}
 \end{column}
-\begin{column}{0.44\textwidth}
-\scriptsize
-\begin{itemize}\setlength{\itemsep}{1.1mm}
-  \item The two MCAR patterns are nearly interchangeable: with 49 other assets observed on each date, breaking the time axis costs a cross-sectional imputer little.
-  \item Stressed deletions are aligned by date. They remove the conditioning set, and what they remove are the largest returns.
-  \item BRITS falls behind where deletions are most extreme: MAE \kpi{0.0301} against EM's 0.0133 at (0, 0.1, 0.99).
-  \item At (0.2, 1, 0.9) the ranking compresses: CovErr between 0.648 and 0.663 for every surviving model.
-\end{itemize}
-\vskip1mm
-{\scriptsize
+\begin{column}{0.4\textwidth}
+{\footnotesize
 \begin{tabular}{@{}lccc@{}}
 \toprule
 EM CovErr & Sparse & Gaps & Stressed \\
 \midrule
-about 10\% missing & 0.0237 & 0.0238 & 0.0554 \\
-about 30\% missing & 0.0565 & 0.0589 & \kpi{0.6634} \\
+10\% missing & 0.0237 & 0.0238 & 0.0554 \\
+30\% missing & 0.0565 & 0.0589 & \kpi{0.6634} \\
 \bottomrule
 \end{tabular}\par}
-\end{column}
-\end{columns}
-\end{frame}
-
-\begin{frame}[t]{Downstream I: the portfolio amplifies the distortion}
-\note{The tangency portfolio inverts the covariance, so small distortions turn into large positions. Under random missingness the imputed portfolios take on far more risk than the oracle; under stressed missingness they never see the volatility and fall short. This is an in-sample diagnostic of fidelity, not a performance claim.}
-\vskip-1.5mm
-\centering
-\includegraphics[width=\textwidth]{portfolio_realizations.pdf}\par
-\vskip0.5mm
-\raggedright
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.235\textwidth}
-\scriptsize\textbf{Oracle}\\
-{\color{muted}complete panel, annualised}\\
-mean 0.361, variance 0.049\\
-Sharpe \kpi{1.636}
-\end{column}
-\begin{column}{0.245\textwidth}
-\scriptsize\textbf{Heavy MCAR}\\
-Variance rises from 0.049 to as much as 0.29 and $L^1$ weight distances reach 14: the inverted $\hat{\bm\Sigma}$ over-leverages.
-\end{column}
-\begin{column}{0.245\textwidth}
-\scriptsize\textbf{Heavy MNAR}\\
-The imputers never see the volatility; their portfolios end at little more than half of the oracle's cumulative return.
-\end{column}
-\begin{column}{0.235\textwidth}
-\scriptsize\textbf{Who fails}\\
-EM and Low-rank are never the worst. BRITS: Sharpe 1.30 against EM's 1.51 at (0.05, 0.5, 0.9).
-\end{column}
-\end{columns}
-\src{In-sample diagnostic of reconstruction fidelity, not investment performance. Deletion: Sharpe near zero at sparse 0.1; its covariance is singular at the heavy levels.}
-\end{frame}
-
-\begin{frame}[t]{Downstream II: a robust market factor, a fragile subspace}
-\note{The first principal component is almost indestructible. The five-factor subspace is not, and the misalignment sits in one direction of it. Point imputations make the panel look more like its own factor model. Low-rank is worst on exactly the evaluation that might be expected to favour it. Last line: the portfolio inverse loads on the directions recovered worst, which ties the two evaluations together.}
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.63\textwidth}
-\vskip-1.5mm
-\includegraphics[width=\linewidth]{factor_structure.pdf}
-\src{Top: variance share of the first 15 components (log scale). Bottom: ordered principal angles between the 15-factor subspaces, not per-factor errors. Heaviest level of each pattern.}
-\end{column}
-\begin{column}{0.345\textwidth}
-\scriptsize
-\begin{itemize}\setlength{\itemsep}{0.9mm}
-  \item Market direction: $D_1 < 0.026$ at sparse 0.3, under 1.5 degrees
-  \item Five-factor subspace: $D_5$ from 0.14 to 0.39, six to eighteen times larger
-  \item Conditional fills inflate the first factor: \kpi{41.74\%} to between 45.6\% and 48.5\% at sparse 0.3
-  \item Low-rank has the largest $D_5$ at 10 of 15 levels, although it imposes a factor structure
-  \item At (0.2, 1, 0.9) the first factor falls to about 25\% for all four methods that can be evaluated
+\vskip5mm
+\small
+\begin{itemize}\setlength{\itemsep}{2mm}
+  \item MCAR patterns: interchangeable
+  \item Stressed MNAR removes the conditioning set
+  \item At the heaviest level no method separates
 \end{itemize}
 \end{column}
 \end{columns}
-\vskip0.5mm
+\end{frame}
+
+\newcommand{\figtile}[3]{%
+  \begin{column}{0.235\textwidth}\centering
+  {\tiny\color{muted}#1}\par\vskip0.6mm
+  {\large\bfseries\color{#3}#2}
+  \end{column}}
+
+\begin{frame}[t]{Downstream I: the portfolio amplifies the distortion}
+\note{The tangency portfolio inverts the covariance, so small distortions turn into large positions. Oracle on the complete panel, annualised: mean 0.361, variance 0.049, Sharpe 1.636. Under heavy MCAR the variance rises from 0.049 to as much as 0.29 and L1 weight distances reach 14: the inverted covariance over-leverages. Under heavy MNAR the imputers never see the volatility; their portfolios end at little more than half of the oracle's cumulative return. EM and Low-rank are never the worst; BRITS has Sharpe 1.30 against EM's 1.51 at (0.05, 0.5, 0.9). Deletion: Sharpe near zero at sparse 0.1, singular covariance at the heavy levels. This is an in-sample diagnostic of fidelity, not a performance claim.}
+\vskip-1.5mm
+\centering
+\includegraphics[width=\textwidth]{portfolio_realizations.pdf}\par
+\vskip4mm
+\begin{columns}[T,onlytextwidth]
+\figtile{ORACLE SHARPE}{1.636}{ink}
+\figtile{HEAVY MCAR: VARIANCE}{0.049 $\to$ 0.29}{accent}
+\figtile{HEAVY MNAR: CUM.\ RETURN}{just over half}{accent}
+\figtile{SHARPE, BRITS VS EM}{1.30 vs 1.51}{ink}
+\end{columns}
+\vskip3mm
+\src{\centering In-sample diagnostic of reconstruction fidelity, not investment performance.}
+\end{frame}
+
+\begin{frame}[t]{Downstream II: a robust market factor, a fragile subspace}
+\note{The first principal component is almost indestructible: D1 below 0.026 at sparse 0.3, under 1.5 degrees. The five-factor subspace is not: D5 from 0.14 to 0.39, six to eighteen times larger. Point imputations make the panel look more like its own factor model: conditional fills inflate the first factor's share from 41.74\% to between 45.6\% and 48.5\% at sparse 0.3. Low-rank has the largest D5 at 10 of 15 levels, although it imposes a factor structure. At (0.2, 1, 0.9) the first factor falls to about 25\% for all four methods that can be evaluated. Link to the portfolio: the inverse covariance loads most on the trailing directions, the ones recovered worst; the portfolio's error maximisation is the factor distortion seen through an inverse.}
+\begin{columns}[T,onlytextwidth]
+\begin{column}{0.64\textwidth}
+\vskip1mm
+\includegraphics[width=\linewidth]{factor_structure.pdf}
+\src{Variance shares (top) and principal angles (bottom), heaviest level of each pattern.}
+\end{column}
+\begin{column}{0.335\textwidth}
+\vskip4mm
+\renewcommand{\arraystretch}{1.5}\setlength{\tabcolsep}{2pt}
+{\scriptsize
+\begin{tabular}{@{}L{25mm}r@{}}
+\toprule
+Market factor, $D_1$ & $<$\,0.026 \\
+Five factors, $D_5$ & \kpi{0.14 to 0.39} \\
+PC1 share, true & 41.7\% \\
+PC1 share, imputed & 45.6 to 48.5\% \\
+Low-rank worst $D_5$ & 10 of 15 \\
+\bottomrule
+\end{tabular}\par}
+\vskip3mm
 \begin{block}{}
-\scriptsize
-$\hat{\bm\Sigma}^{-1} = \sum_i \hat\lambda_i^{-1}\,\hat v_i \hat v_i^\top$: the portfolio loads most on the trailing directions, the ones the imputations recover worst. Its error maximisation is the factor distortion seen through an inverse.
+\centering\scriptsize
+$\hat{\bm\Sigma}^{-1} = \sum_i \hat\lambda_i^{-1}\,\hat v_i \hat v_i^\top$\\[0.5mm]
+{\color{muted}portfolio weight sits on the\\worst-recovered directions}
 \end{block}
+\end{column}
+\end{columns}
 \end{frame}
 
 \newcommand{\costtile}[4]{%
-  \begin{minipage}[t][29mm][t]{30mm}\centering
+  \begin{minipage}[t][24mm][t]{30mm}\centering
   {\fontsize{26}{28}\selectfont\bfseries\color{#2}#1}\par\vskip2.5mm
-  {\scriptsize\bfseries #3\par\vskip0.8mm\mdseries #4\par}
+  {\scriptsize\bfseries #3\par\vskip0.8mm\mdseries\color{muted}#4\par}
   \end{minipage}}
 
 \begin{frame}[t]{The deep models did not earn their cost}
-\note{All of this ran on a single consumer machine with small networks, so the costs come from the algorithms. EM needs about a second; CSDI needs hours of training and twenty-four minutes of sampling per panel, for a reconstruction that is not better.}
-\vskip5mm
+\note{All of this ran on a single Apple Mac mini (M4, 16 GB), CPU-only PyTorch, with small networks (about 1.2e5 parameters for BRITS, 4.7e4 for CSDI), so the costs come from the algorithms. EM needs about a second to fill a 4125 x 50 panel. BRITS: just under an hour of training per panel (1e4 epochs). CSDI: just under four hours of training per panel, then about 24 minutes of sampling. Roughly seventy hours of neural training for the 15 levels, four fifths of it on CSDI. CSDI matches EM's accuracy at about four orders of magnitude more computation, and BRITS falls behind at two stressed levels.}
+\vskip11mm
 \centering
 \begin{tikzpicture}[tile/.style={rectangle, rounded corners=2pt, fill=tint, inner sep=2.5mm, anchor=north}]
-  \node[tile] at (0,0) {\costtile{1\,s}{emc}{EM}{about one second to fill a $4125\times50$ panel}};
-  \node[tile] at (37.5mm,0) {\costtile{1\,h}{ink}{BRITS}{just under an hour of training per panel ($10^4$~epochs)}};
-  \node[tile] at (75mm,0) {\costtile{4\,h}{accent}{CSDI}{just under four hours of training per panel, then about 24 minutes of sampling}};
-  \node[tile] at (112.5mm,0) {\costtile{70\,h}{ink}{All neural training}{roughly seventy hours for the 15 levels, four fifths of it on CSDI}};
+  \node[tile] at (0,0) {\costtile{1\,s}{emc}{EM}{per panel}};
+  \node[tile] at (37.5mm,0) {\costtile{1\,h}{ink}{BRITS}{training per panel}};
+  \node[tile] at (75mm,0) {\costtile{4\,h}{accent}{CSDI}{training per panel, plus 24 min sampling}};
+  \node[tile] at (112.5mm,0) {\costtile{70\,h}{ink}{All neural training}{15 levels, four fifths CSDI}};
 \end{tikzpicture}
-\vskip7mm
-\raggedright
-\small CSDI matches EM's accuracy at about \textbf{four orders of magnitude} more computation, and BRITS falls behind at two stressed levels.
-\src{Single Apple Mac mini (M4, 16\,GB), CPU-only PyTorch. Small networks: about $1.2\times10^5$ parameters for BRITS and $4.7\times10^4$ for CSDI. Times are approximate, as reported in Section 3.3 of the thesis.}
+\vskip9mm
+{\large CSDI matches EM at about \kpi{four orders of magnitude} more computation}\par
+\src{\centering Single Mac mini (M4, 16\,GB), CPU only. Approximate times, Section 3.3.}
 \end{frame}
 
 %%==========================================================================
 \section{Conclusion}
 
-\begin{frame}[t]{Answers to the four questions}
-\note{Go back to the four questions. The single message to leave with the committee is the last line: an imputation should be judged by the use it is put to, because reconstruction error is least informative exactly where the choice of method matters.}
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.485\textwidth}
-\begin{block}{1\enspace Mechanism or amount?}
-\scriptsize\begin{minipage}[t][14mm][t]{\linewidth}\raggedright
-The mechanism, in this experiment. Under MCAR the methods hold with 30\% missing; under stressed MNAR they break at far smaller shares, and at the heaviest level no method separates.
-\end{minipage}
-\end{block}
-\vskip-1mm
-\begin{block}{3\enspace Is pointwise accuracy a good proxy?}
-\scriptsize\begin{minipage}[t][14mm][t]{\linewidth}\raggedright
-Poor. Zero's MAE is 1.5 times the best and its CovErr about 9 times. Conditional fills inflate the first factor, from 41.7\% to as much as 48.5\%, which no pointwise metric registers.
-\end{minipage}
-\end{block}
-\end{column}
-\begin{column}{0.485\textwidth}
-\begin{block}{2\enspace Do the deep imputers earn their cost?}
-\scriptsize\begin{minipage}[t][14mm][t]{\linewidth}\raggedright
-Not here. EM is rarely beaten; CSDI matches it at four orders of magnitude more cost; BRITS falls behind at two stressed levels.
-\end{minipage}
-\end{block}
-\vskip-1mm
-\begin{block}{4\enspace Do the rankings survive downstream?}
-\scriptsize\begin{minipage}[t][14mm][t]{\linewidth}\raggedright
-Largely, and the exceptions are informative. Low-rank: accurate cells, worst five-factor subspace at 10 of 15 levels. Deletion: inefficient in the tables, unstable portfolios downstream.
-\end{minipage}
-\end{block}
-\end{column}
-\end{columns}
-\vskip2mm
-\begin{block}{}
-\centering\small\textbf{Score an imputation against the use it is put to.}
-\end{block}
-\end{frame}
+\newcommand{\answer}[3]{%
+  \node[rectangle, rounded corners=2pt, fill=tint, text width=67mm, minimum height=13mm,
+        inner sep=2.2mm, anchor=north west, align=left] at (#1) {%
+    {\color{accent}\bfseries\large #2}\enspace{\small #3}};}
 
-\begin{frame}[t]{Limitations and future work}
-\note{Be upfront about the limits: one panel, one run, injected missingness, Gaussian EM, offline setting. The natural next step is the causal version of the problem, where only the past may be used.}
+\begin{frame}[t]{Conclusions}
+\note{Go back to the four questions. 1: the mechanism, in this experiment; under MCAR the methods hold with 30\% missing, under stressed MNAR they break at far smaller shares, and at the heaviest level no method separates. 2: not here; EM is rarely beaten, CSDI matches it at four orders of magnitude more cost, BRITS falls behind at two stressed levels. 3: poor; Zero's MAE is 1.5 times the best and its CovErr about 9 times; conditional fills inflate the first factor from 41.7\% to as much as 48.5\%, which no pointwise metric registers. 4: largely, and the exceptions are informative; Low-rank has accurate cells but the worst five-factor subspace at 10 of 15 levels; Deletion is inefficient in the tables and gives unstable portfolios downstream. Limitations: one panel of fifty liquid large caps, daily, one run per configuration; injected missingness, the stressed pattern is a stylised MNAR; Gaussian EM without the Student-t refinement; both downstream models read the covariance; the portfolio is in sample; offline setting. Future work: causal imputation using only the past, downstream tests beyond the second moment (VaR backtests, hedging, trading rules), multiple imputation using the spread of the CSDI draws, larger cross sections and real gaps.}
 \recordmainframes
-\begin{columns}[T,onlytextwidth]
-\begin{column}{0.485\textwidth}
-\small\textbf{Limitations}\par\vskip1mm
-\footnotesize
-\begin{itemize}\setlength{\itemsep}{1mm}
-  \item One panel: fifty liquid large caps, daily, one period, one run per configuration
-  \item Injected missingness; the stressed pattern is a stylised MNAR that mixes the selection rule with date-aligned deletion
-  \item Gaussian EM without the Student-$t$ refinement; both downstream models read $\hat{\bm\Sigma}$; the portfolio is in sample
-  \item Offline setting: BRITS and CSDI use observations after the gap
-\end{itemize}
-\end{column}
-\begin{column}{0.485\textwidth}
-\small\textbf{Future work}\par\vskip1mm
-\footnotesize
-\begin{itemize}\setlength{\itemsep}{1mm}
-  \item Causal imputation with only past data, to measure the cost of filling in real time
-  \item Downstream tests beyond the second moment: VaR backtests, hedging, trading rules
-  \item Multiple imputation: let the decision see the spread of the CSDI draws
-  \item Larger cross sections, other frequencies and asset classes, real gaps
-\end{itemize}
-\end{column}
-\end{columns}
+\vskip1mm
+\begin{tikzpicture}
+  \answer{0,0}{1}{\textbf{The mechanism}, not the amount}
+  \answer{73mm,0}{2}{Deep models: \textbf{no gain}, far higher cost}
+  \answer{0,-15mm}{3}{Pointwise accuracy is a \textbf{poor proxy}}
+  \answer{73mm,-15mm}{4}{Rankings \textbf{largely survive} downstream}
+\end{tikzpicture}
+\vskip3mm
+\begin{block}{}
+\centering\normalsize\textbf{Score an imputation against the use it is put to.}
+\end{block}
+\vskip2mm
+{\scriptsize
+\textbf{Limitations}\enspace{\color{muted}one panel, injected missingness, Gaussian EM, in-sample portfolio, offline}\par\vskip1mm
+\textbf{Next}\enspace{\color{muted}causal imputation, multiple imputation, tests beyond the second moment}\par}
 \vfill
 \centering{\Large\bfseries\color{ink}Thank you}\par
-\vskip3mm
+\vskip2mm
 \end{frame}
+
 
 %%==========================================================================
 \appendix
