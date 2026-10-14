@@ -1,0 +1,232 @@
+THESIS DISCUSSION SCRIPT
+Imputation of Missing Data in Financial Time Series
+Deck: thesis_presentation.pdf (12 slides)
+
+About 1240 spoken words: 9:15 at a normal pace of 135 words a minute, or just under
+10:00 if you speak slowly (125 words a minute).
+Text in [brackets] is a stage cue, not spoken. Sentences marked [Optional] can be
+dropped if you are running late (saves about 25 seconds).
+
+TIMING
+  Slide  Title                                   Time   Ends at
+  1      Title                                   0:15   0:15
+  2      Financial data is never fully observed  1:00   1:15
+  3      A controlled experiment                 0:45   2:00
+  4      Three mechanisms                        0:45   2:45
+  5      Seven methods                           0:45   3:30
+  6      Pointwise errors hit a floor            0:50   4:20
+  7      Accurate cells, inaccurate panel        0:45   5:05
+  8      The mechanism matters more              0:45   5:50
+  9      Downstream I: portfolio                 0:55   6:45
+  10     Downstream II: factor structure         0:55   7:40
+  11     Cost of the deep models                 0:35   8:15
+  12     Conclusions                             1:00   9:15
+         Slack for pauses and pointing           0:45   10:00
+
+
+==============================================================================
+INTRODUCTION
+==============================================================================
+
+SLIDE 1: TITLE (0:15)
+
+Good morning. My name is Michele Carlo Fanelli, and my thesis, supervised by
+Professor Corielli, is about filling the holes in financial data, and about how
+we should judge whether the holes were filled well.
+
+
+SLIDE 2: FINANCIAL DATA IS NEVER FULLY OBSERVED (1:00)
+
+Financial data is never complete. Trading halts, feeds drop quotes, and illiquid
+bonds can go unquoted for days.
+
+The usual fixes are not neutral. Carrying the last price forward biases betas.
+Dropping incomplete dates throws away much of the sample. Filling with a
+constant damps variances and correlations. And new methods are almost always
+judged pointwise: how close each filled cell is to the true value.
+
+[Point to the four tiles] So the thesis asks four questions. Does the damage
+depend on how much is missing, or on the mechanism that removed it? Do deep
+learning imputers earn their cost? Is pointwise accuracy a good proxy for the
+quality of the panel? And do the rankings survive when the panel is used for a
+decision?
+
+The aim, at the bottom, is to score every imputation twice: on reconstruction,
+and on the model built on it, against the same model fitted on the complete
+data.
+
+
+==============================================================================
+METHODOLOGY
+==============================================================================
+
+SLIDE 3: A CONTROLLED EXPERIMENT ON A COMPLETE EQUITY PANEL (0:45)
+
+To answer these questions I need a setting where the truth is known. So I start
+from a complete panel: fifty S&P 500 stocks, daily, from 2010 to 2026. That is
+4125 days by 50 stocks of log returns. I use returns because prices are
+non-stationary and level dependent.
+
+[Move along the arrows] I delete entries under known rules, three mechanisms at
+five levels, which gives 15 corrupted panels. Seven methods fill each one, so
+105 imputed panels, each scored with seven metrics and two downstream models.
+
+One point to keep in mind: this is offline reconstruction. Every method may use
+the whole sample, including the dates after a gap.
+
+
+SLIDE 4: THREE MECHANISMS, MATCHED ON THE SHARE OF MISSING CELLS (0:45)
+
+These are the three mechanisms. On the left, sparse: each cell is deleted
+independently, completely at random. In the middle, contiguous gaps: runs of
+missing days within one stock, still at random.
+
+On the right, stressed: deletions concentrate on the most volatile dates,
+measured by the squared average return of the panel. This one is missing not at
+random, because the imputer never sees the score that drove the deletion. You
+can see the horizontal stripes: whole dates go missing together.
+
+[Point to the table] The key design choice is here. The five levels are matched
+on the expected share of missing cells, from 0.1 to 30 percent. So any
+difference between patterns comes from the mechanism, not from the amount.
+
+
+SLIDE 5: SEVEN METHODS, SCORED ON THE WHOLE PANEL (0:45)
+
+I compare seven methods. Two baselines: deleting incomplete dates, and filling
+with zero, which is what carrying a price forward does to returns. Three
+classical estimators: nearest neighbours, low-rank completion and Gaussian EM.
+And two deep models: BRITS, a bidirectional recurrent network, and CSDI, a
+conditional diffusion model.
+
+The one to watch is EM. Its fill, in the formula, is the conditional mean of
+the missing returns given the stocks observed on the same day.
+
+[Point to the right] Each panel is scored with seven metrics in four families,
+from pointwise error to covariance and temporal dependence, and then with two
+downstream models: a tangency portfolio and the factor structure.
+
+
+==============================================================================
+RESULTS
+==============================================================================
+
+SLIDE 6: POINTWISE ERRORS HIT A FLOOR AT ONCE, AND EM SITS ON IT (0:50)
+
+The first result is about pointwise error, here the mean absolute error under
+sparse missingness. What stands out is how flat the curves are.
+
+Daily returns are almost serially uncorrelated, so nearly everything we can
+know about a missing return comes from the other stocks on the same day. EM
+extracts exactly that, and its error stays between 0.0071 and 0.0080 at every
+level.
+
+The five conditional methods differ only in the third decimal, so the extra
+capacity of the deep models has little to work with. Only Zero, the dashed
+line, stands apart. The ranking is stable across patterns: EM is rarely beaten,
+and never by much.
+
+
+SLIDE 7: ACCURATE CELLS DO NOT MAKE AN ACCURATE PANEL (0:45)
+
+But accurate cells do not make an accurate panel. On the left is the
+covariance error, on a log scale. EM's pointwise error stays flat, yet its
+covariance error grows almost 40 times from the lightest level to the heaviest.
+Pointwise metrics average over the filled cells; the covariance error
+accumulates them over the whole panel.
+
+[Point to the right chart] At 30 percent sparse missingness, Zero's MAE is only
+1.5 times that of the best method, but its covariance error is 8.9 times.
+
+Even among good methods the two views disagree. The best fill cell by cell is a
+conditional mean, smoother than the return it replaces, so it damps the second
+moment.
+
+
+SLIDE 8: THE MECHANISM MATTERS MORE THAN THE AMOUNT (0:45)
+
+This is EM's covariance error by mechanism, at matched shares. Sparse and gaps
+lie almost on top of each other: with 49 other stocks observed on each date,
+breaking the time axis costs a cross-sectional method very little.
+
+The stressed pattern is different. It removes whole dates, so the conditioning
+set is gone, and the returns it removes are the largest ones. At 30 percent the
+covariance error is 0.66, more than ten times the 0.06 under random
+missingness.
+
+[Optional] BRITS falls behind where deletions are most concentrated, with an
+MAE of 0.030 against EM's 0.013. At the heaviest level no method separates:
+they all land between 0.648 and 0.663.
+
+
+SLIDE 9: DOWNSTREAM I, THE PORTFOLIO AMPLIFIES THE DISTORTION (0:55)
+
+Now the downstream models. The tangency portfolio inverts the covariance
+matrix, so small distortions become large positions. The black line is the
+oracle, fitted on the complete panel, with a Sharpe ratio of 1.636.
+
+Under heavy random missingness, left and middle, the imputed portfolios take
+on far more risk: variance rises from 0.049 to as much as 0.29. Under stressed
+missingness, on the right, the imputers never see the volatility, and their
+portfolios end at just over half of the oracle's cumulative return.
+
+EM and Low-rank are never the worst. BRITS falls behind, for example with a
+Sharpe of 1.30 against EM's 1.51 at one stressed level. This is an in-sample
+diagnostic of fidelity, not a claim about investment performance.
+
+
+SLIDE 10: DOWNSTREAM II, A ROBUST MARKET FACTOR, A FRAGILE SUBSPACE (0:55)
+
+The second downstream model is the factor structure. The top row shows the
+variance explained by each principal component; the bottom row, the angles
+between the true and estimated factor subspaces.
+
+The market factor is almost indestructible: its distance D1 stays below 0.026,
+under one and a half degrees. The five-factor subspace is fragile: D5 ranges
+from 0.14 to 0.39. Imputation also inflates the first factor, from 41.7 percent
+of the variance to between 45.6 and 48.5 percent: the filled panel looks more
+like its own factor model.
+
+[Optional] Low-rank, which imposes a factor structure, has the worst
+five-factor subspace at 10 of the 15 levels.
+
+This links back to the portfolio. The inverse covariance puts most weight on
+the trailing directions, which are exactly the ones recovered worst.
+
+
+SLIDE 11: THE DEEP MODELS DID NOT EARN THEIR COST (0:35)
+
+Finally, cost. Everything ran on a single Mac mini, on CPU. EM fills a panel in
+about a second. BRITS needs just under an hour of training per panel, CSDI just
+under four hours plus 24 minutes of sampling: about seventy hours of neural
+training in total.
+
+So CSDI matches EM at roughly four orders of magnitude more computation, and
+BRITS falls behind at two stressed levels. In this setting, the deep models did
+not earn their cost.
+
+
+==============================================================================
+CONCLUSION
+==============================================================================
+
+SLIDE 12: CONCLUSIONS (1:00)
+
+To come back to the four questions. First, in this experiment it is the
+mechanism, not the amount: under random missingness the methods hold up with
+30 percent of the data gone, while under stressed missingness they break at far
+smaller shares.
+
+Second, the deep models did not earn their cost: no gain over EM, at four
+orders of magnitude more computation. Third, pointwise accuracy is a poor
+proxy: it misses the covariance damage and the inflated first factor. Fourth,
+the rankings largely survive downstream, but the exceptions are informative:
+Low-rank has accurate cells and a distorted factor subspace.
+
+[Point to the box] So the message is simple: score an imputation against the
+use it is put to.
+
+The main limits are one panel, injected missingness and an offline setting.
+The natural next step is causal imputation, using only the past.
+
+Thank you. I am happy to take your questions.
